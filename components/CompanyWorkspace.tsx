@@ -1,4 +1,247 @@
-'use client';import {useEffect,useMemo,useState} from 'react';
-type Job={id:number;title:string;location?:string;salaryText?:string;sourceUrl:string;taskSignals?:string;advertScore:number;lastSeenAt:string};type Company={id:number;name:string;country?:string;website?:string;phone?:string;email?:string;employeeCount?:number;employeeRange?:string;location?:string;activeJobCount:number;totalJobCount:number;estimatedSalarySpend:number;opportunityScore:number;scoreReason?:string;recurringTasks?:string;opportunitySummary?:string;status:string;notes?:string;jobs:Job[]};const statuses=['NEW','REVIEWING','CONTACTED','FOLLOW_UP','MEETING','ASSESSMENT','WON','PASSED','NO_RESPONSE','NOT_INTERESTED'];
-export default function CompanyWorkspace(){const [items,setItems]=useState<Company[]>([]),[selected,setSelected]=useState<Company|null>(null),[q,setQ]=useState(''),[min,setMin]=useState(0),[contact,setContact]=useState(false),[multi,setMulti]=useState(false),[checked,setChecked]=useState<number[]>([]),[notice,setNotice]=useState('');const load=async()=>{const p=new URLSearchParams({q,minScore:String(min)});if(contact)p.set('contactable','1');if(multi)p.set('multi','1');setItems(await fetch('/api/companies?'+p).then(r=>r.json()))};useEffect(()=>{load()},[q,min,contact,multi]);const update=async(id:number,patch:Partial<Company>)=>{const d=await fetch('/api/companies/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)}).then(r=>r.json());setItems(x=>x.map(v=>v.id===id?d:v));if(selected?.id===id)setSelected(d)};const batch=async()=>{if(!checked.length)return;const name=prompt('Batch name',new Date().toISOString().slice(0,10)+' Outreach');if(!name)return;await fetch('/api/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,companyIds:checked})});setNotice(`Saved ${checked.length} companies to ${name}`);setChecked([])};const all=useMemo(()=>items.length>0&&items.every(x=>checked.includes(x.id)),[items,checked]);return <><div className="card"><div className="toolbar"><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search company, location or task" style={{minWidth:280}}/><select value={min} onChange={e=>setMin(Number(e.target.value))}><option value="0">All scores</option><option value="40">40+</option><option value="60">60+</option><option value="80">80+</option></select><label><input type="checkbox" checked={contact} onChange={e=>setContact(e.target.checked)}/> Contactable</label><label><input type="checkbox" checked={multi} onChange={e=>setMulti(e.target.checked)}/> Multiple jobs</label><button disabled={!checked.length} onClick={batch}>Save batch ({checked.length})</button><span className="muted">{notice}</span></div><div style={{overflow:'auto',maxHeight:'72vh'}}><table><thead><tr><th><input type="checkbox" checked={all} onChange={e=>setChecked(e.target.checked?items.map(x=>x.id):[])}/></th><th>Score</th><th>Company</th><th>Jobs</th><th>Salary investment</th><th>Size</th><th>Contact</th><th>Status</th></tr></thead><tbody>{items.map(c=><tr key={c.id} style={{cursor:'pointer'}}><td><input type="checkbox" checked={checked.includes(c.id)} onChange={e=>setChecked(x=>e.target.checked?[...x,c.id]:x.filter(id=>id!==c.id))}/></td><td onClick={()=>setSelected(c)}><span className={`score ${c.opportunityScore>=70?'high':c.opportunityScore>=45?'mid':'low'}`}>{c.opportunityScore}</span></td><td onClick={()=>setSelected(c)}><strong>{c.name}</strong><div className="muted">{c.location}</div></td><td>{c.activeJobCount} active / {c.totalJobCount} found</td><td>{c.estimatedSalarySpend?`${c.country==='NZ'?'NZ$':'£'}${c.estimatedSalarySpend.toLocaleString()}`:'Unknown'}</td><td>{c.employeeRange||'Unknown'}</td><td>{c.email||c.phone||'—'}</td><td><select value={c.status} onChange={e=>update(c.id,{status:e.target.value})}>{statuses.map(s=><option key={s}>{s.replaceAll('_',' ')}</option>)}</select></td></tr>)}</tbody></table>{!items.length&&<div className="empty">No companies match these filters.</div>}</div></div>{selected&&<div className="drawer"><div className="drawer-head"><div><span className={`score ${selected.opportunityScore>=70?'high':selected.opportunityScore>=45?'mid':'low'}`}>{selected.opportunityScore}</span><h2>{selected.name}</h2><div className="muted">{selected.country} · {selected.activeJobCount} active jobs</div></div><button className="secondary" onClick={()=>setSelected(null)}>Close</button></div><hr style={{border:0,borderTop:'1px solid var(--line)',margin:'18px 0'}}/><div className="grid2"><Field label="Email" value={selected.email} onChange={v=>update(selected.id,{email:v})}/><Field label="Phone" value={selected.phone} onChange={v=>update(selected.id,{phone:v})}/><Field label="Website" value={selected.website} onChange={v=>update(selected.id,{website:v})}/><Field label="Employee range" value={selected.employeeRange} onChange={v=>update(selected.id,{employeeRange:v})}/></div><Text label="Why this company scored" value={selected.scoreReason}/><Text label="Recurring task evidence" value={selected.recurringTasks}/><Text label="Opportunity summary" value={selected.opportunitySummary}/><Text label="Notes" value={selected.notes} editable onChange={v=>update(selected.id,{notes:v})}/><h3>Job evidence</h3>{selected.jobs.map(j=><div className="card" style={{marginBottom:10}} key={j.id}><strong>{j.title}</strong><div className="muted">{j.location} · {j.salaryText||'Salary not shown'} · advert signal {j.advertScore}</div><p>{j.taskSignals||'No task signals extracted'}</p><a className="button secondary" target="_blank" href={j.sourceUrl}>Open advert</a></div>)}</div>}</>}
-function Field({label,value,onChange}:{label:string;value?:string;onChange:(v:string)=>void}){return <label className="field"><span className="label">{label}</span><input value={value||''} onChange={e=>onChange(e.target.value)}/></label>}function Text({label,value,editable,onChange}:{label:string;value?:string;editable?:boolean;onChange?:(v:string)=>void}){return <div className="field"><span className="label">{label}</span>{editable?<textarea value={value||''} onChange={e=>onChange?.(e.target.value)}/>:<div style={{whiteSpace:'pre-wrap'}}>{value||'—'}</div>}</div>}
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+
+type Job = {
+  id: number;
+  title: string;
+  location?: string;
+  salaryText?: string;
+  sourceUrl: string;
+  taskSignals?: string;
+  advertScore: number;
+  lastSeenAt: string;
+};
+
+type Company = {
+  id: number;
+  name: string;
+  country?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  employeeCount?: number;
+  employeeRange?: string;
+  location?: string;
+  activeJobCount: number;
+  totalJobCount: number;
+  estimatedSalarySpend: number;
+  opportunityScore: number;
+  scoreReason?: string;
+  recurringTasks?: string;
+  opportunitySummary?: string;
+  status: string;
+  notes?: string;
+  jobs: Job[];
+};
+
+const statuses = ['NEW', 'REVIEWING', 'CONTACTED', 'FOLLOW_UP', 'MEETING', 'ASSESSMENT', 'WON', 'PASSED', 'NO_RESPONSE', 'NOT_INTERESTED'];
+
+export default function CompanyWorkspace() {
+  const [items, setItems] = useState<Company[]>([]);
+  const [selected, setSelected] = useState<Company | null>(null);
+  const [q, setQ] = useState('');
+  const [min, setMin] = useState(0);
+  const [contact, setContact] = useState(false);
+  const [multi, setMulti] = useState(false);
+  const [checked, setChecked] = useState<number[]>([]);
+  const [notice, setNotice] = useState('');
+
+  const load = async () => {
+    const p = new URLSearchParams({ q, minScore: String(min) });
+    if (contact) p.set('contactable', '1');
+    if (multi) p.set('multi', '1');
+    setItems(await fetch('/api/companies?' + p).then(r => r.json()));
+  };
+
+  useEffect(() => { load(); }, [q, min, contact, multi]);
+
+  const update = async (id: number, patch: Partial<Company>) => {
+    const d = await fetch('/api/companies/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).then(r => r.json());
+    setItems(x => x.map(v => v.id === id ? d : v));
+    if (selected?.id === id) setSelected(d);
+  };
+
+  const batch = async () => {
+    if (!checked.length) return;
+    const name = prompt('Batch name', new Date().toISOString().slice(0, 10) + ' Outreach');
+    if (!name) return;
+    await fetch('/api/batches', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, companyIds: checked }),
+    });
+    setNotice(`Saved ${checked.length} companies to ${name}`);
+    setChecked([]);
+  };
+
+  const all = useMemo(() => items.length > 0 && items.every(x => checked.includes(x.id)), [items, checked]);
+
+  return (
+    <>
+      <div className="page-header">
+        <h1>Companies</h1>
+        <p>Filter, review and manage your lead profiles.</p>
+      </div>
+
+      <div className="card">
+        <div className="toolbar">
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Search company, location or task"
+            style={{ minWidth: 280 }}
+          />
+          <select value={min} onChange={e => setMin(Number(e.target.value))}>
+            <option value="0">All scores</option>
+            <option value="40">40+</option>
+            <option value="60">60+</option>
+            <option value="80">80+</option>
+          </select>
+          <label>
+            <input type="checkbox" checked={contact} onChange={e => setContact(e.target.checked)} />
+            Contactable
+          </label>
+          <label>
+            <input type="checkbox" checked={multi} onChange={e => setMulti(e.target.checked)} />
+            Multiple jobs
+          </label>
+          {checked.length > 0 && (
+            <button className="secondary" onClick={batch}>
+              Save batch ({checked.length})
+            </button>
+          )}
+          {notice && <span className="muted">{notice}</span>}
+        </div>
+
+        <div style={{ overflow: 'auto', maxHeight: '70vh' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={all}
+                    onChange={e => setChecked(e.target.checked ? items.map(x => x.id) : [])}
+                  />
+                </th>
+                <th>Score</th>
+                <th>Company</th>
+                <th>Jobs</th>
+                <th>Salary investment</th>
+                <th>Size</th>
+                <th>Contact</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(c => (
+                <tr key={c.id} style={{ cursor: 'pointer' }}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={checked.includes(c.id)}
+                      onChange={e => setChecked(x => e.target.checked ? [...x, c.id] : x.filter(id => id !== c.id))}
+                    />
+                  </td>
+                  <td onClick={() => setSelected(c)}>
+                    <span className={`score ${c.opportunityScore >= 70 ? 'high' : c.opportunityScore >= 45 ? 'mid' : 'low'}`}>
+                      {c.opportunityScore}
+                    </span>
+                  </td>
+                  <td onClick={() => setSelected(c)}>
+                    <strong>{c.name}</strong>
+                    <div className="muted">{c.location}</div>
+                  </td>
+                  <td>{c.activeJobCount} active / {c.totalJobCount} found</td>
+                  <td>{c.estimatedSalarySpend ? `${c.country === 'NZ' ? 'NZ$' : '£'}${c.estimatedSalarySpend.toLocaleString()}` : 'Unknown'}</td>
+                  <td>{c.employeeRange || 'Unknown'}</td>
+                  <td>{c.email || c.phone || '—'}</td>
+                  <td>
+                    <select
+                      value={c.status}
+                      onChange={e => update(c.id, { status: e.target.value })}
+                      style={{ padding: '6px 8px', fontSize: '0.85rem' }}
+                    >
+                      {statuses.map(s => (
+                        <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!items.length && <div className="empty">No companies match these filters.</div>}
+        </div>
+      </div>
+
+      {selected && (
+        <div className="drawer">
+          <div className="drawer-head">
+            <div>
+              <span className={`score ${selected.opportunityScore >= 70 ? 'high' : selected.opportunityScore >= 45 ? 'mid' : 'low'}`}>
+                {selected.opportunityScore}
+              </span>
+              <h2>{selected.name}</h2>
+              <div className="muted">{selected.country} · {selected.activeJobCount} active jobs</div>
+            </div>
+            <button className="secondary" onClick={() => setSelected(null)}>Close</button>
+          </div>
+
+          <hr />
+
+          <div className="grid2">
+            <Field label="Email" value={selected.email} onChange={v => update(selected.id, { email: v })} />
+            <Field label="Phone" value={selected.phone} onChange={v => update(selected.id, { phone: v })} />
+            <Field label="Website" value={selected.website} onChange={v => update(selected.id, { website: v })} />
+            <Field label="Employee range" value={selected.employeeRange} onChange={v => update(selected.id, { employeeRange: v })} />
+          </div>
+
+          <Text label="Why this company scored" value={selected.scoreReason} />
+          <Text label="Recurring task evidence" value={selected.recurringTasks} />
+          <Text label="Opportunity summary" value={selected.opportunitySummary} />
+          <Text label="Notes" value={selected.notes} editable onChange={v => update(selected.id, { notes: v })} />
+
+          <h3 style={{ marginTop: 24, marginBottom: 12 }}>Job evidence</h3>
+          {selected.jobs.map(j => (
+            <div className="job-card" key={j.id}>
+              <strong>{j.title}</strong>
+              <div className="muted">{j.location} · {j.salaryText || 'Salary not shown'} · advert signal {j.advertScore}</div>
+              <p>{j.taskSignals || 'No task signals extracted'}</p>
+              <a className="button secondary" target="_blank" href={j.sourceUrl} style={{ marginTop: 8, fontSize: '0.8rem', padding: '6px 12px' }}>
+                Open advert →
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function Field({ label, value, onChange }: { label: string; value?: string; onChange: (v: string) => void }) {
+  return (
+    <label className="field">
+      <span className="label">{label}</span>
+      <input value={value || ''} onChange={e => onChange(e.target.value)} />
+    </label>
+  );
+}
+
+function Text({ label, value, editable, onChange }: { label: string; value?: string; editable?: boolean; onChange?: (v: string) => void }) {
+  return (
+    <div className="field">
+      <span className="label">{label}</span>
+      {editable ? (
+        <textarea value={value || ''} onChange={e => onChange?.(e.target.value)} />
+      ) : (
+        <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem', color: '#424657' }}>{value || '—'}</div>
+      )}
+    </div>
+  );
+}
