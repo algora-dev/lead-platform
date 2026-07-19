@@ -133,7 +133,7 @@ export async function enrichCompany(
 }
 
 function activeJobPoints(active: number): number {
-  const bands = SCORING.activeJobPoints || {};
+  const bands: Record<string, number> = (SCORING.activeJobPoints || {}) as Record<string, number>;
   if (active >= 4) return bands['4_plus'] || 30;
   return bands[String(active)] || 0;
 }

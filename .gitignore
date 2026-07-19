@@ -9,3 +9,6 @@ prisma/dev.db-journal
 __pycache__/
 .pytest_cache/
 .DS_Store
+
+.vercel
+.env*
