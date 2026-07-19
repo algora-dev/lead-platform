@@ -1,0 +1,12 @@
+{
+  "businessName": "Your AI Consultancy",
+  "productName": "Lead Intelligence Platform",
+  "tagline": "Recruitment activity as a signal of commercial opportunity",
+  "primaryColor": "#1f6feb",
+  "secondaryColor": "#17202a",
+  "backgroundColor": "#f5f7fa",
+  "cardColor": "#ffffff",
+  "buttonRadius": "8px",
+  "leadSingular": "Company",
+  "leadPlural": "Companies"
+}

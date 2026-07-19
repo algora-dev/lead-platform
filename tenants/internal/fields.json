@@ -1,0 +1,11 @@
+{
+  "taskGroups": {
+    "data and records": ["data entry", "update records", "maintain records", "database", "spreadsheet", "excel", "crm", "erp", "customer records"],
+    "customer communication": ["customer enquiries", "client enquiries", "shared inbox", "email inbox", "respond to emails", "telephone enquiries", "customer service"],
+    "scheduling and coordination": ["schedule", "scheduling", "appointments", "booking", "bookings", "calendar", "rota", "coordinate meetings"],
+    "orders and purchasing": ["order processing", "process orders", "purchase orders", "purchasing", "procurement", "stock control", "inventory"],
+    "documents and administration": ["document preparation", "prepare documents", "paperwork", "forms", "contracts", "quotations", "quotes", "invoices", "administration"],
+    "reporting and reconciliation": ["reporting", "prepare reports", "weekly reports", "monthly reports", "reconciliation", "reconcile", "kpi", "management information"],
+    "workflow and systems": ["workflow", "multiple systems", "software systems", "manual process", "automation", "integrations", "system updates"]
+  }
+}

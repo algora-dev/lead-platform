@@ -1,0 +1,88 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "sqlite" url = env("DATABASE_URL") }
+
+enum CompanyStatus { NEW REVIEWING CONTACTED FOLLOW_UP MEETING ASSESSMENT WON PASSED NO_RESPONSE NOT_INTERESTED }
+
+model Company {
+  id                    Int           @id @default(autoincrement())
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  name                  String
+  normalizedName        String
+  country               String?
+  website               String?
+  phone                 String?
+  email                 String?
+  contactSourceUrl      String?
+  employeeCount         Int?
+  employeeRange         String?
+  industry              String?
+  location              String?
+  activeJobCount        Int           @default(0)
+  totalJobCount         Int           @default(0)
+  estimatedSalarySpend  Int           @default(0)
+  opportunityScore      Int           @default(0)
+  scoreReason           String?
+  recurringTasks        String?
+  opportunitySummary    String?
+  status                CompanyStatus @default(NEW)
+  notes                 String?
+  discarded             Boolean       @default(false)
+  firstSeenAt           DateTime       @default(now())
+  lastSeenAt            DateTime       @default(now())
+  jobs                   JobAdvert[]
+  batches                Batch[]
+  @@unique([normalizedName, country])
+}
+
+model JobAdvert {
+  id                Int      @id @default(autoincrement())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  companyId         Int
+  company           Company  @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  title             String
+  country           String?
+  location          String?
+  salaryText        String?
+  annualSalaryHigh  Int?
+  source             String
+  sourceUrl          String   @unique
+  canonicalUrl      String    @unique
+  discoveryQuery    String?
+  description       String?
+  taskSignals       String?
+  advertScore       Int       @default(0)
+  firstSeenAt       DateTime  @default(now())
+  lastSeenAt        DateTime  @default(now())
+  isActive          Boolean   @default(true)
+}
+
+model Batch {
+  id          Int       @id @default(autoincrement())
+  name        String
+  createdAt   DateTime  @default(now())
+  archivedAt  DateTime?
+  notes       String?
+  companies   Company[]
+}
+
+model ScanRun {
+  id                 Int      @id @default(autoincrement())
+  source             String
+  country            String
+  startedAt          DateTime @default(now())
+  completedAt        DateTime?
+  status             String   @default("RUNNING")
+  deepOffset         Int      @default(1)
+  searchRequests     Int      @default(0)
+  resultsFound       Int      @default(0)
+  pagesFetched       Int      @default(0)
+  duplicateAdverts   Int      @default(0)
+  advertsSaved       Int      @default(0)
+  companiesCreated   Int      @default(0)
+  companiesUpdated   Int      @default(0)
+  contactsFound      Int      @default(0)
+  errors              Int      @default(0)
+  message             String?
+}

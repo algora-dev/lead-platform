@@ -1,0 +1,10 @@
+{
+  "scanning": true,
+  "csvUpload": false,
+  "batches": true,
+  "emailOutreach": false,
+  "smsOutreach": false,
+  "aiCalling": false,
+  "crmIntegration": false,
+  "multipleUsers": false
+}

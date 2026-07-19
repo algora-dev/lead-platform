@@ -1,0 +1,30 @@
+{
+  "brave": {
+    "enabled": true,
+    "countries": ["UK", "NZ"],
+    "freshness": "pm",
+    "resultsPerPage": 20,
+    "defaultQueryLimit": 16,
+    "negativeTerms": ["student", "internship", "volunteer", "graduate"],
+    "queryPairs": [
+      ["data entry", "CRM"],
+      ["customer enquiries", "CRM"],
+      ["order processing", "Excel"],
+      ["scheduling", "customer enquiries"],
+      ["purchase orders", "reporting"],
+      ["invoice processing", "data entry"],
+      ["document preparation", "CRM"],
+      ["shared inbox", "scheduling"],
+      ["stock control", "Excel"],
+      ["quotations", "customer enquiries"],
+      ["bookings", "administration"],
+      ["reconciliation", "reporting"],
+      ["update records", "email enquiries"],
+      ["workflow", "manual process"],
+      ["contracts", "document preparation"],
+      ["ERP", "reporting"]
+    ]
+  },
+  "jobTerms": ["job", "vacancy", "career", "position", "role", "hiring", "employment"],
+  "ignoreDomains": ["linkedin.com", "facebook.com", "instagram.com", "youtube.com", "reddit.com"]
+}
