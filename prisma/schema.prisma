@@ -12,6 +12,19 @@ enum UserRole {
   MEMBER
 }
 
+model Tenant {
+  id          Int      @id @default(autoincrement())
+  createdAt   DateTime @default(now())
+  name        String   @unique
+  slug        String   @unique
+  branding    Json?
+  features    Json?
+  users       User[]
+  companies   Company[]
+  batches     Batch[]
+  scanRuns    ScanRun[]
+}
+
 model User {
   id           Int       @id @default(autoincrement())
   createdAt    DateTime  @default(now())
@@ -20,6 +33,8 @@ model User {
   name         String?
   role         UserRole  @default(MEMBER)
   active       Boolean   @default(true)
+  tenantId     Int
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 enum CompanyStatus {
@@ -39,6 +54,8 @@ model Company {
   id                    Int           @id @default(autoincrement())
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
+  tenantId              Int
+  tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name                  String
   normalizedName        String
   country               String?
@@ -64,7 +81,7 @@ model Company {
   lastSeenAt            DateTime      @default(now())
   jobs                  JobAdvert[]
   batches               Batch[]
-  @@unique([normalizedName, country])
+  @@unique([tenantId, normalizedName, country])
 }
 
 model JobAdvert {
@@ -92,6 +109,8 @@ model JobAdvert {
 
 model Batch {
   id          Int       @id @default(autoincrement())
+  tenantId    Int
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name        String
   createdAt   DateTime  @default(now())
   archivedAt  DateTime?
@@ -101,6 +120,8 @@ model Batch {
 
 model ScanRun {
   id                 Int       @id @default(autoincrement())
+  tenantId           Int
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   source             String
   country            String
   startedAt          DateTime  @default(now())

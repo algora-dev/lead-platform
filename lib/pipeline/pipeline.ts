@@ -16,14 +16,14 @@ export interface ScanStats {
   errors: number;
 }
 
-export async function runScan(country: 'UK' | 'NZ', queryLimit = 16): Promise<{ message: string; stats: ScanStats }> {
+export async function runScan(country: 'UK' | 'NZ', tenantId: number, queryLimit = 16): Promise<{ message: string; stats: ScanStats }> {
   const apiKey = process.env.BRAVE_API_KEY;
   if (!apiKey) throw new Error('BRAVE_API_KEY is missing from .env');
 
   const countryCode = country === 'UK' ? 'GB' : 'NZ';
 
   // Determine deep offset based on prior scan count
-  const priorScans = await prisma.scanRun.count({ where: { country } });
+  const priorScans = await prisma.scanRun.count({ where: { country, tenantId } });
   const deep = 1 + (priorScans % 9);
 
   const scanRun = await prisma.scanRun.create({
@@ -32,6 +32,7 @@ export async function runScan(country: 'UK' | 'NZ', queryLimit = 16): Promise<{ 
       country,
       status: 'RUNNING',
       deepOffset: deep,
+      tenantId,
     },
   });
 
@@ -76,7 +77,7 @@ export async function runScan(country: 'UK' | 'NZ', queryLimit = 16): Promise<{ 
 
           // Check for existing advert
           const existing = await prisma.jobAdvert.findFirst({
-            where: { OR: [{ canonicalUrl: url }, { sourceUrl: url }] },
+            where: { OR: [{ canonicalUrl: url }, { sourceUrl: url }], company: { tenantId } },
           });
 
           if (existing) {
@@ -101,8 +102,7 @@ export async function runScan(country: 'UK' | 'NZ', queryLimit = 16): Promise<{ 
 
           const norm = normalizeCompany(page.company);
           let company = await prisma.company.findFirst({
-            where: { normalizedName: norm, country },
-          });
+            where: { normalizedName: norm, country, tenantId } });
 
           let cid: number;
           if (company) {
@@ -115,6 +115,7 @@ export async function runScan(country: 'UK' | 'NZ', queryLimit = 16): Promise<{ 
                 normalizedName: norm,
                 country,
                 location: page.location,
+                tenantId,
               },
             });
             cid = company.id;

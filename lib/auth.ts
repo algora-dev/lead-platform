@@ -12,6 +12,8 @@ export interface SessionUser {
   email: string;
   name: string | null;
   role: string;
+  tenantId: number;
+  tenantSlug: string;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -59,11 +61,21 @@ export async function clearSessionCookie() {
 }
 
 export async function authenticateUser(email: string, password: string): Promise<SessionUser | null> {
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user || !user.active) return null;
+  const user = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+    include: { tenant: true },
+  });
+  if (!user || !user.active || !user.tenant) return null;
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) return null;
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    tenantId: user.tenantId,
+    tenantSlug: user.tenant.slug,
+  };
 }
 
 export { COOKIE_NAME };

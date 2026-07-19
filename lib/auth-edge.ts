@@ -9,12 +9,12 @@ export interface SessionUser {
   email: string;
   name: string | null;
   role: string;
+  tenantId: number;
+  tenantSlug: string;
 }
 
 export { COOKIE_NAME, JWT_SECRET };
 
-// Simple JWT decode/verify for Edge Runtime
-// JWT format: header.payload.signature (all base64url)
 async function importKey(): Promise<CryptoKey> {
   const enc = new TextEncoder();
   return crypto.subtle.importKey(
@@ -45,6 +45,8 @@ export async function verifyTokenEdge(token: string): Promise<SessionUser | null
       email: payload.email,
       name: payload.name,
       role: payload.role,
+      tenantId: payload.tenantId,
+      tenantSlug: payload.tenantSlug,
     };
   } catch {
     return null;

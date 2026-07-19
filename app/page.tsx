@@ -1,9 +1,16 @@
 import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
+  const session = await getSession();
+  if (!session) redirect('/login');
+
+  const t = session.tenantId;
+
   const [
     totalLeads,
     contactable,
@@ -18,23 +25,24 @@ export default async function Home() {
     topLeads,
     uncontacted,
   ] = await Promise.all([
-    prisma.company.count({ where: { discarded: false } }),
-    prisma.company.count({ where: { discarded: false, OR: [{ email: { not: null } }, { phone: { not: null } }] } }),
-    prisma.company.count({ where: { discarded: false, opportunityScore: { gte: 70 } } }),
-    prisma.company.count({ where: { discarded: false, opportunityScore: { gte: 45, lt: 70 } } }),
-    prisma.company.count({ where: { discarded: false, status: 'NEW' } }),
-    prisma.company.count({ where: { discarded: false, status: 'REVIEWING' } }),
-    prisma.company.count({ where: { discarded: false, status: 'CONTACTED' } }),
-    prisma.company.count({ where: { discarded: false, activeJobCount: { gte: 2 } } }),
-    prisma.company.count({ where: { discarded: false, employeeCount: { gte: 10, lte: 150 } } }),
-    prisma.scanRun.findMany({ orderBy: { startedAt: 'desc' }, take: 3 }),
+    prisma.company.count({ where: { tenantId: t, discarded: false } }),
+    prisma.company.count({ where: { tenantId: t, discarded: false, OR: [{ email: { not: null } }, { phone: { not: null } }] } }),
+    prisma.company.count({ where: { tenantId: t, discarded: false, opportunityScore: { gte: 70 } } }),
+    prisma.company.count({ where: { tenantId: t, discarded: false, opportunityScore: { gte: 45, lt: 70 } } }),
+    prisma.company.count({ where: { tenantId: t, discarded: false, status: 'NEW' } }),
+    prisma.company.count({ where: { tenantId: t, discarded: false, status: 'REVIEWING' } }),
+    prisma.company.count({ where: { tenantId: t, discarded: false, status: 'CONTACTED' } }),
+    prisma.company.count({ where: { tenantId: t, discarded: false, activeJobCount: { gte: 2 } } }),
+    prisma.company.count({ where: { tenantId: t, discarded: false, employeeCount: { gte: 10, lte: 150 } } }),
+    prisma.scanRun.findMany({ where: { tenantId: t }, orderBy: { startedAt: 'desc' }, take: 3 }),
     prisma.company.findMany({
-      where: { discarded: false, status: { in: ['NEW', 'REVIEWING'] } },
+      where: { tenantId: t, discarded: false, status: { in: ['NEW', 'REVIEWING'] } },
       orderBy: [{ opportunityScore: 'desc' }, { lastSeenAt: 'desc' }],
       take: 5,
     }),
     prisma.company.count({
       where: {
+        tenantId: t,
         discarded: false,
         opportunityScore: { gte: 60 },
         status: 'NEW',
@@ -53,7 +61,6 @@ export default async function Home() {
         <p>Your lead intelligence overview.</p>
       </div>
 
-      {/* Alerts */}
       {!hasData && (
         <div className="alert info">
           No leads yet. <Link href="/scan" style={{ fontWeight: 600, textDecoration: 'underline' }}>Run your first scan</Link> to start finding companies.
@@ -66,7 +73,6 @@ export default async function Home() {
         </div>
       )}
 
-      {/* Metrics row */}
       <div className="metrics">
         <div className="card metric">
           <span>Total Leads</span>
@@ -90,9 +96,7 @@ export default async function Home() {
         </div>
       </div>
 
-      {/* Widget grid */}
       <div className="widget-grid">
-        {/* To-do list */}
         <div className="card">
           <div className="card-head">
             <h2>To Do</h2>
@@ -120,7 +124,6 @@ export default async function Home() {
           </ul>
         </div>
 
-        {/* Scan status */}
         <div className="card">
           <div className="card-head">
             <h2>Scan Activity</h2>
@@ -153,7 +156,6 @@ export default async function Home() {
         </div>
       </div>
 
-      {/* Lead breakdown */}
       <div className="card">
         <div className="card-head">
           <h2>Lead Pipeline</h2>
