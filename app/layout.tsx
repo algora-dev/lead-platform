@@ -1,6 +1,7 @@
 import './globals.css';
 import Link from 'next/link';
 import {tenant} from '@/lib/tenant';
+export const dynamic = 'force-dynamic';
 
 export const metadata={
   title:tenant.branding.productName,

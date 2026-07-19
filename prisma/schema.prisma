@@ -1,7 +1,24 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "sqlite" url = env("DATABASE_URL") }
+generator client {
+  provider = "prisma-client-js"
+}
 
-enum CompanyStatus { NEW REVIEWING CONTACTED FOLLOW_UP MEETING ASSESSMENT WON PASSED NO_RESPONSE NOT_INTERESTED }
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CompanyStatus {
+  NEW
+  REVIEWING
+  CONTACTED
+  FOLLOW_UP
+  MEETING
+  ASSESSMENT
+  WON
+  PASSED
+  NO_RESPONSE
+  NOT_INTERESTED
+}
 
 model Company {
   id                    Int           @id @default(autoincrement())
@@ -28,10 +45,10 @@ model Company {
   status                CompanyStatus @default(NEW)
   notes                 String?
   discarded             Boolean       @default(false)
-  firstSeenAt           DateTime       @default(now())
-  lastSeenAt            DateTime       @default(now())
-  jobs                   JobAdvert[]
-  batches                Batch[]
+  firstSeenAt           DateTime      @default(now())
+  lastSeenAt            DateTime      @default(now())
+  jobs                  JobAdvert[]
+  batches               Batch[]
   @@unique([normalizedName, country])
 }
 
@@ -40,22 +57,22 @@ model JobAdvert {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   companyId         Int
-  company           Company  @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   title             String
   country           String?
   location          String?
   salaryText        String?
   annualSalaryHigh  Int?
-  source             String
-  sourceUrl          String   @unique
-  canonicalUrl      String    @unique
+  source            String
+  sourceUrl         String   @unique
+  canonicalUrl      String   @unique
   discoveryQuery    String?
   description       String?
   taskSignals       String?
-  advertScore       Int       @default(0)
-  firstSeenAt       DateTime  @default(now())
-  lastSeenAt        DateTime  @default(now())
-  isActive          Boolean   @default(true)
+  advertScore       Int      @default(0)
+  firstSeenAt       DateTime @default(now())
+  lastSeenAt        DateTime @default(now())
+  isActive          Boolean  @default(true)
 }
 
 model Batch {
@@ -68,21 +85,21 @@ model Batch {
 }
 
 model ScanRun {
-  id                 Int      @id @default(autoincrement())
+  id                 Int       @id @default(autoincrement())
   source             String
   country            String
-  startedAt          DateTime @default(now())
+  startedAt          DateTime  @default(now())
   completedAt        DateTime?
-  status             String   @default("RUNNING")
-  deepOffset         Int      @default(1)
-  searchRequests     Int      @default(0)
-  resultsFound       Int      @default(0)
-  pagesFetched       Int      @default(0)
-  duplicateAdverts   Int      @default(0)
-  advertsSaved       Int      @default(0)
-  companiesCreated   Int      @default(0)
-  companiesUpdated   Int      @default(0)
-  contactsFound      Int      @default(0)
-  errors              Int      @default(0)
-  message             String?
+  status             String    @default("RUNNING")
+  deepOffset         Int       @default(1)
+  searchRequests     Int       @default(0)
+  resultsFound       Int       @default(0)
+  pagesFetched       Int       @default(0)
+  duplicateAdverts   Int       @default(0)
+  advertsSaved       Int       @default(0)
+  companiesCreated   Int       @default(0)
+  companiesUpdated   Int       @default(0)
+  contactsFound      Int       @default(0)
+  errors             Int       @default(0)
+  message            String?
 }
