@@ -26,9 +26,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </Link>
           <nav className="site-nav">
             <Link href="/">Dashboard</Link>
-            <Link href="/companies">{b.leadPlural}</Link>
-            <Link href="/batches">Batches</Link>
-            <Link href="/sources">Scan</Link>
+            <Link href="/scan">New Scan</Link>
+            <Link href="/leads">Leads</Link>
           </nav>
         </header>
         <div className="shell">{children}</div>

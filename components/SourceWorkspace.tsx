@@ -50,8 +50,8 @@ export default function SourceWorkspace() {
   return (
     <>
       <div className="page-header">
-        <h1>Scan</h1>
-        <p>Run a Brave Search scan to find companies advertising operational roles.</p>
+        <h1>New Scan</h1>
+        <p>Find companies advertising operational roles.</p>
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
