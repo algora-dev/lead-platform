@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import CSVUpload from './CSVUpload';
 
 type ScanProfile = {
   id: number;
@@ -32,7 +33,7 @@ type Run = {
   profile?: { id: number; name: string; slug: string } | null;
 };
 
-type Tab = 'scan' | 'profiles';
+type Tab = 'scan' | 'profiles' | 'csv';
 
 export default function SourceWorkspace() {
   const [tab, setTab] = useState<Tab>('scan');
@@ -148,6 +149,17 @@ export default function SourceWorkspace() {
           }}
         >
           Scan Profiles
+        </button>
+        <button
+          className={`tab ${tab === 'csv' ? 'active' : ''}`}
+          onClick={() => setTab('csv')}
+          style={{
+            padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
+            fontWeight: tab === 'csv' ? 600 : 400,
+            borderBottom: tab === 'csv' ? '2px solid #d7ff00' : '2px solid transparent',
+          }}
+        >
+          CSV Upload
         </button>
       </div>
 
@@ -299,6 +311,10 @@ export default function SourceWorkspace() {
 
       {tab === 'profiles' && (
         <ProfileManager profiles={profiles} onReload={loadProfiles} />
+      )}
+
+      {tab === 'csv' && (
+        <CSVUpload profiles={profiles} />
       )}
     </>
   );
