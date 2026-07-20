@@ -1,8 +1,9 @@
 import { prisma } from '@/lib/prisma';
-import { JOB_TERMS, IGNORE_DOMAINS, TASK_GROUPS } from './config';
+import { IGNORE_DOMAINS as DEFAULT_IGNORE_DOMAINS, JOB_BOARD_DOMAINS, SCORING as DEFAULT_SCORING } from './config';
 import { buildQueries, braveSearch, officialSiteSearch } from './collector';
-import { parseJob, canonicalise, countryOk } from './parser';
-import { taskSignals, advertScore, normalizeCompany, enrichCompany, companyScore } from './intelligence';
+import { parseJob, canonicalise, countryOk, EMAIL_RE, PHONE_RE, clean } from './parser';
+import { taskSignals, advertScore, normalizeCompany, enrichCompany, companyScore, parseEmployeeRange } from './intelligence';
+import type { ScanProfileConfig } from './scan-profile';
 
 export interface ScanStats {
   searchRequests: number;
@@ -16,14 +17,34 @@ export interface ScanStats {
   errors: number;
 }
 
-export async function runScan(country: 'UK' | 'NZ', tenantId: number, queryLimit = 16): Promise<{ message: string; stats: ScanStats }> {
+/** Merge profile scoring over defaults */
+function mergeScoring(profileScoring: ScanProfileConfig['scoring']) {
+  return { ...DEFAULT_SCORING, ...profileScoring };
+}
+
+export async function runScan(
+  country: string,
+  tenantId: number,
+  profileConfig: ScanProfileConfig,
+  profileId: number | null,
+  queryLimit?: number,
+  batchId?: number
+): Promise<{ message: string; stats: ScanStats }> {
   const apiKey = process.env.BRAVE_API_KEY;
   if (!apiKey) throw new Error('BRAVE_API_KEY is missing from .env');
 
-  const countryCode = country === 'UK' ? 'GB' : 'NZ';
+  const countryCode = country === 'UK' ? 'GB' : country === 'NZ' ? 'NZ' : 'GB';
+  const scoring = mergeScoring(profileConfig.scoring);
+  const jobTerms = profileConfig.jobTerms;
+  const ignoreDomains = [...DEFAULT_IGNORE_DOMAINS, ...profileConfig.ignoreDomains];
+  const taskGroups = profileConfig.taskGroups;
+  const queryPairs = profileConfig.brave.queryPairs;
+  const limit = queryLimit || profileConfig.brave.defaultQueryLimit || 16;
 
-  // Determine deep offset based on prior scan count
-  const priorScans = await prisma.scanRun.count({ where: { country, tenantId } });
+  // Determine deep offset based on prior scan count for this profile
+  const priorScans = await prisma.scanRun.count({
+    where: { country, tenantId, profileId },
+  });
   const deep = 1 + (priorScans % 9);
 
   const scanRun = await prisma.scanRun.create({
@@ -33,6 +54,7 @@ export async function runScan(country: 'UK' | 'NZ', tenantId: number, queryLimit
       status: 'RUNNING',
       deepOffset: deep,
       tenantId,
+      profileId,
     },
   });
 
@@ -51,15 +73,22 @@ export async function runScan(country: 'UK' | 'NZ', tenantId: number, queryLimit
   const touched = new Set<number>();
 
   try {
-    const queries = buildQueries(country).slice(0, queryLimit);
+    // Build queries from profile config
+    const place = country === 'UK' ? 'UK' : country === 'NZ' ? 'New Zealand' : country;
+    const negatives = (profileConfig.brave.negativeTerms || [])
+      .map((t: string) => `-${t}`)
+      .join(' ');
+    const queries = queryPairs.map(
+      ([a, b]) => `"${a}" "${b}" job ${place} ${negatives}`.trim()
+    ).slice(0, limit);
 
     for (const query of queries) {
       for (const offset of [0, deep]) {
         let results;
         try {
-          results = await braveSearch(apiKey, query, countryCode, 20, offset);
+          results = await braveSearch(apiKey, query, countryCode, profileConfig.brave.resultsPerPage || 20, offset);
           stats.searchRequests++;
-        } catch (e) {
+        } catch {
           stats.errors++;
           continue;
         }
@@ -68,12 +97,14 @@ export async function runScan(country: 'UK' | 'NZ', tenantId: number, queryLimit
 
         for (const item of results) {
           const url = canonicalise(item.url);
-          const host = new URL(url).hostname.toLowerCase();
+          let host: string;
+          try { host = new URL(url).hostname.toLowerCase(); } catch { continue; }
+
           const snippet = `${item.title} ${item.description} ${url}`.toLowerCase();
 
-          if (!url || IGNORE_DOMAINS.some((d) => host.includes(d))) continue;
-          if (!JOB_TERMS.some((x) => snippet.includes(x))) continue;
-          if (!Object.values(TASK_GROUPS).some((terms) => (terms as string[]).some((term) => snippet.includes(term.toLowerCase())))) continue;
+          if (!url || ignoreDomains.some((d) => host.includes(d))) continue;
+          if (!jobTerms.some((x) => snippet.includes(x.toLowerCase()))) continue;
+          if (!Object.values(taskGroups).some((terms) => (terms as string[]).some((term) => snippet.includes(term.toLowerCase())))) continue;
 
           // Check for existing advert
           const existing = await prisma.jobAdvert.findFirst({
@@ -97,12 +128,13 @@ export async function runScan(country: 'UK' | 'NZ', tenantId: number, queryLimit
             continue;
           }
 
-          const signals = taskSignals(page.description);
+          const signals = taskSignals(page.description, taskGroups);
           if (signals.length === 0) continue;
 
           const norm = normalizeCompany(page.company);
           let company = await prisma.company.findFirst({
-            where: { normalizedName: norm, country, tenantId } });
+            where: { normalizedName: norm, country, tenantId },
+          });
 
           let cid: number;
           if (company) {
@@ -136,12 +168,20 @@ export async function runScan(country: 'UK' | 'NZ', tenantId: number, queryLimit
               discoveryQuery: query,
               description: page.description,
               taskSignals: signals.join(', '),
-              advertScore: advertScore(signals),
+              advertScore: advertScore(signals, scoring),
               isActive: true,
             },
           });
           stats.advertsSaved++;
           touched.add(cid);
+
+          // Link to batch if provided
+          if (batchId) {
+            await prisma.company.update({
+              where: { id: cid },
+              data: { batches: { connect: { id: batchId } } },
+            });
+          }
 
           // Update company contact info if found on the job page
           if (page.emails.length > 0 || page.phones.length > 0 || page.website) {
@@ -205,7 +245,8 @@ export async function runScan(country: 'UK' | 'NZ', tenantId: number, queryLimit
         jobsForScoring,
         info.email,
         info.phone,
-        info.employee_count
+        info.employee_count,
+        scoring
       );
 
       await prisma.company.update({

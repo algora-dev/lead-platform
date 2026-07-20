@@ -1,4 +1,5 @@
-import { QUERY_PAIRS, SOURCES } from './config';
+import { QUERY_PAIRS as DEFAULT_QUERY_PAIRS, SOURCES as DEFAULT_SOURCES } from './config';
+import type { ScanProfileConfig } from './scan-profile';
 
 const BRAVE_URL = 'https://api.search.brave.com/res/v1/web/search';
 
@@ -8,12 +9,12 @@ export interface BraveResult {
   description: string;
 }
 
-export function buildQueries(country: string): string[] {
+export function buildQueries(country: string, profile?: ScanProfileConfig): string[] {
+  const queryPairs = profile?.brave.queryPairs || DEFAULT_QUERY_PAIRS;
+  const negativeTerms = profile?.brave.negativeTerms || (DEFAULT_SOURCES.brave.negativeTerms || []);
   const place = country === 'UK' ? 'UK' : 'New Zealand';
-  const negatives = (SOURCES.brave.negativeTerms || [])
-    .map((t: string) => `-${t}`)
-    .join(' ');
-  return QUERY_PAIRS.map(
+  const negatives = negativeTerms.map((t: string) => `-${t}`).join(' ');
+  return queryPairs.map(
     ([a, b]) => `"${a}" "${b}" job ${place} ${negatives}`.trim()
   );
 }
@@ -23,9 +24,10 @@ export async function braveSearch(
   query: string,
   countryCode: string,
   count = 20,
-  offset = 0
+  offset = 0,
+  profile?: ScanProfileConfig
 ): Promise<BraveResult[]> {
-  const brave = SOURCES.brave;
+  const brave = profile?.brave || DEFAULT_SOURCES.brave;
   const params = new URLSearchParams({
     q: query,
     country: countryCode,

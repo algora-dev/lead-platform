@@ -1,17 +1,18 @@
-import { JOB_BOARD_DOMAINS, IGNORE_DOMAINS, TASK_GROUPS, SCORING } from './config';
+import { JOB_BOARD_DOMAINS, IGNORE_DOMAINS, TASK_GROUPS as DEFAULT_TASK_GROUPS, SCORING as DEFAULT_SCORING } from './config';
 import { EMAIL_RE, PHONE_RE, clean } from './parser';
 
-export function taskSignals(text: string): string[] {
+export function taskSignals(text: string, taskGroups?: Record<string, string[]>): string[] {
+  const groups = taskGroups || (DEFAULT_TASK_GROUPS);
   const t = (text || '').toLowerCase();
   const found: string[] = [];
-  for (const [label, terms] of Object.entries(TASK_GROUPS)) {
+  for (const [label, terms] of Object.entries(groups)) {
     if (terms.some((x: string) => x.toLowerCase().includes(t) || t.includes(x.toLowerCase()))) {
       found.push(label);
     }
   }
   // More precise: check each term as substring
   const precise: string[] = [];
-  for (const [label, terms] of Object.entries(TASK_GROUPS)) {
+  for (const [label, terms] of Object.entries(groups)) {
     if ((terms as string[]).some((x) => t.includes(x.toLowerCase()))) {
       precise.push(label);
     }
@@ -19,9 +20,10 @@ export function taskSignals(text: string): string[] {
   return precise.length > 0 ? precise : found;
 }
 
-export function advertScore(signals: string[]): number {
-  const cap = SCORING.advertTaskPointsCap || 40;
-  const per = SCORING.advertTaskPointsPerGroup || 8;
+export function advertScore(signals: string[], scoring?: any): number {
+  const s = scoring || DEFAULT_SCORING;
+  const cap = s.advertTaskPointsCap || 40;
+  const per = s.advertTaskPointsPerGroup || 8;
   return Math.min(cap, per * new Set(signals).size);
 }
 
@@ -132,15 +134,15 @@ export async function enrichCompany(
   };
 }
 
-function activeJobPoints(active: number): number {
-  const bands: Record<string, number> = (SCORING.activeJobPoints || {}) as Record<string, number>;
+function activeJobPoints(active: number, scoring: any): number {
+  const bands: Record<string, number> = (scoring.activeJobPoints || {}) as Record<string, number>;
   if (active >= 4) return bands['4_plus'] || 30;
   return bands[String(active)] || 0;
 }
 
-function salaryPoints(salary: number): number {
+function salaryPoints(salary: number, scoring: any): number {
   let points = 0;
-  const bands = [...(SCORING.salaryBands || [])].sort(
+  const bands = [...(scoring.salaryBands || [])].sort(
     (a: any, b: any) => (a.minimum || 0) - (b.minimum || 0)
   );
   for (const band of bands) {
@@ -149,9 +151,9 @@ function salaryPoints(salary: number): number {
   return points;
 }
 
-function sizePoints(employeeCount: number | null): number {
+function sizePoints(employeeCount: number | null, scoring: any): number {
   if (employeeCount === null) return 0;
-  for (const band of SCORING.companySizeBands || []) {
+  for (const band of scoring.companySizeBands || []) {
     if (
       (band.minimum || 0) <= employeeCount &&
       employeeCount <= (band.maximum || 999999)
@@ -174,8 +176,10 @@ export function companyScore(
   jobs: { signals?: string[]; salary_high?: number | null }[],
   email: string | null,
   phone: string | null,
-  employeeCount: number | null
+  employeeCount: number | null,
+  scoringOverride?: any
 ): ScoreResult {
+  const SCORING = scoringOverride || DEFAULT_SCORING;
   const allSignals = jobs.flatMap((j) => j.signals || []);
   const counts: Record<string, number> = {};
   for (const s of allSignals) counts[s] = (counts[s] || 0) + 1;
@@ -187,7 +191,7 @@ export function companyScore(
     SCORING.companyTaskPointsCap || 30,
     unique * (SCORING.companyTaskPointsPerGroup || 5)
   );
-  const hiringPoints = activeJobPoints(active);
+  const hiringPoints = activeJobPoints(active, SCORING);
   const repeatPoints = Math.min(
     SCORING.repeatTaskPointsCap || 15,
     Object.values(counts).reduce(
@@ -195,11 +199,11 @@ export function companyScore(
       0
     )
   );
-  const salaryPts = salaryPoints(salary);
+  const salaryPts = salaryPoints(salary, SCORING);
   const contactCfg = SCORING.contactPoints || {};
   const contactPoints =
     (email ? contactCfg.email || 5 : 0) + (phone ? contactCfg.phone || 5 : 0);
-  const sizePts = sizePoints(employeeCount);
+  const sizePts = sizePoints(employeeCount, SCORING);
   const base = SCORING.baseHiringSignal || 12;
 
   const total = Math.min(

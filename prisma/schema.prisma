@@ -23,6 +23,7 @@ model Tenant {
   companies   Company[]
   batches     Batch[]
   scanRuns    ScanRun[]
+  scanProfiles ScanProfile[]
 }
 
 model User {
@@ -111,6 +112,8 @@ model Batch {
   id          Int       @id @default(autoincrement())
   tenantId    Int
   tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  profileId   Int?
+  profile     ScanProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
   name        String
   createdAt   DateTime  @default(now())
   archivedAt  DateTime?
@@ -118,10 +121,28 @@ model Batch {
   companies   Company[]
 }
 
+model ScanProfile {
+  id            Int       @id @default(autoincrement())
+  tenantId      Int
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String
+  slug          String
+  description   String?
+  isActive      Boolean   @default(true)
+  config        Json
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  scanRuns      ScanRun[]
+  batches       Batch[]
+  @@unique([tenantId, slug])
+}
+
 model ScanRun {
   id                 Int       @id @default(autoincrement())
   tenantId           Int
   tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  profileId          Int?
+  profile            ScanProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
   source             String
   country            String
   startedAt          DateTime  @default(now())
