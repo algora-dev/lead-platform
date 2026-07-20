@@ -24,6 +24,8 @@ export default async function Home() {
     recentScans,
     topLeads,
     uncontacted,
+    newThisWeek,
+    batchCount,
   ] = await Promise.all([
     prisma.company.count({ where: { tenantId: t, discarded: false } }),
     prisma.company.count({ where: { tenantId: t, discarded: false, OR: [{ email: { not: null } }, { phone: { not: null } }] } }),
@@ -49,6 +51,14 @@ export default async function Home() {
         OR: [{ email: { not: null } }, { phone: { not: null } }],
       },
     }),
+    prisma.company.count({
+      where: {
+        tenantId: t,
+        discarded: false,
+        firstSeenAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+      },
+    }),
+    prisma.batch.count({ where: { tenantId: t, archivedAt: null } }),
   ]);
 
   const lastScan = recentScans[0];
@@ -80,6 +90,11 @@ export default async function Home() {
           <div className="metric-sub">{newLeads} new · {reviewing} reviewing</div>
         </div>
         <div className="card metric">
+          <span>New This Week</span>
+          <strong>{newThisWeek}</strong>
+          <div className="metric-sub">{Math.round(totalLeads ? (newThisWeek / totalLeads) * 100 : 0)}% of total</div>
+        </div>
+        <div className="card metric">
           <span>Contactable</span>
           <strong>{contactable}</strong>
           <div className="metric-sub">{Math.round(totalLeads ? (contactable / totalLeads) * 100 : 0)}% of total</div>
@@ -93,6 +108,11 @@ export default async function Home() {
           <span>Contacted</span>
           <strong>{contacted}</strong>
           <div className="metric-sub">{Math.round(totalLeads ? (contacted / totalLeads) * 100 : 0)}% outreach rate</div>
+        </div>
+        <div className="card metric">
+          <span>Batches</span>
+          <strong>{batchCount}</strong>
+          <div className="metric-sub">active saved lists</div>
         </div>
       </div>
 

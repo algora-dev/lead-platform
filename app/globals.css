@@ -130,7 +130,7 @@ img { display: block; max-width: 100%; }
 /* Metrics */
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }

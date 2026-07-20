@@ -11,6 +11,8 @@ export async function GET(req: NextRequest) {
   const minScore = Number(searchParams.get('minScore') || 0);
   const contactable = searchParams.get('contactable') === '1';
   const multi = searchParams.get('multi') === '1';
+  const batchId = searchParams.get('batchId');
+  const sinceId = searchParams.get('sinceId'); // only return leads with firstSeenAt > this scan run's startedAt
 
   const where: any = {
     tenantId: session.tenantId,
@@ -26,6 +28,16 @@ export async function GET(req: NextRequest) {
   if (minScore) where.opportunityScore = { gte: minScore };
   if (contactable) where.OR = [{ email: { not: null } }, { phone: { not: null } }];
   if (multi) where.activeJobCount = { gte: 2 };
+  if (batchId) where.batches = { some: { id: Number(batchId) } };
+  if (sinceId) {
+    const scanRun = await prisma.scanRun.findFirst({
+      where: { id: Number(sinceId), tenantId: session.tenantId },
+      select: { startedAt: true },
+    });
+    if (scanRun) {
+      where.firstSeenAt = { gt: scanRun.startedAt };
+    }
+  }
 
   const companies = await prisma.company.findMany({
     where,

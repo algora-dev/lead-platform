@@ -24,6 +24,7 @@ model Tenant {
   batches     Batch[]
   scanRuns    ScanRun[]
   scanProfiles ScanProfile[]
+  filterPresets FilterPreset[]
 }
 
 model User {
@@ -82,6 +83,7 @@ model Company {
   lastSeenAt            DateTime      @default(now())
   jobs                  JobAdvert[]
   batches               Batch[]
+  contactLogs           ContactLog[]
   @@unique([tenantId, normalizedName, country])
 }
 
@@ -119,6 +121,7 @@ model Batch {
   archivedAt  DateTime?
   notes       String?
   companies   Company[]
+  scanRuns    ScanRun[]
 }
 
 model ScanProfile {
@@ -143,6 +146,8 @@ model ScanRun {
   tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   profileId          Int?
   profile            ScanProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  batchId            Int?
+  batch              Batch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
   source             String
   country            String
   startedAt          DateTime  @default(now())
@@ -159,4 +164,27 @@ model ScanRun {
   contactsFound      Int       @default(0)
   errors             Int       @default(0)
   message            String?
+}
+
+model ContactLog {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  companyId   Int
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type        String    @default("note")
+  content     String
+  authorName  String?
+  oldStatus   String?
+  newStatus   String?
+}
+
+model FilterPreset {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenantId    Int
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  config      Json
+  @@unique([tenantId, name])
 }
