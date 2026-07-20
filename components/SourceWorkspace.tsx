@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import CSVUpload from './CSVUpload';
+import ScanSetupWizard from './ScanSetupWizard';
 
 type ScanProfile = {
   id: number;
@@ -44,6 +45,7 @@ export default function SourceWorkspace() {
   const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
   const [selectedCountry, setSelectedCountry] = useState('UK');
   const [createBatch, setCreateBatch] = useState(true);
+  const [showWizard, setShowWizard] = useState(false);
 
   const loadProfiles = useCallback(() =>
     fetch('/api/scan-profiles').then(r => r.json()).then(d => {
@@ -165,9 +167,18 @@ export default function SourceWorkspace() {
 
       {tab === 'scan' && (
         <>
+          {showWizard && (
+            <ScanSetupWizard
+              onClose={() => setShowWizard(false)}
+              onCreated={() => { setShowWizard(false); loadProfiles(); setNotice('Scan profile created!'); }}
+            />
+          )}
+
+          {!showWizard && (
           <div className="card" style={{ marginBottom: 20 }}>
-            <div className="card-head">
+            <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2>New Scan</h2>
+              <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowWizard(true)}>+ Setup Wizard</button>
             </div>
 
             {profiles.length === 0 ? (
@@ -261,6 +272,7 @@ export default function SourceWorkspace() {
               </>
             )}
           </div>
+          )}
 
           <div className="card">
             <div className="card-head">
