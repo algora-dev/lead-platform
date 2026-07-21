@@ -17,6 +17,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const headerList = await headers();
   const pathname = headerList.get('x-pathname') || '';
   const isLoginPage = pathname === '/login';
+  const isV2 = pathname.startsWith('/v2');
 
   return (
     <html lang="en">
@@ -26,7 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body>
-        {isLoginPage ? (
+        {isLoginPage || isV2 ? (
           children
         ) : (
           <>
