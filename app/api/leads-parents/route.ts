@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { name, description } = await req.json();
+  const body = await req.json().catch(() => ({}));
+  const { name, description } = body;
 
   if (!name) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
   const parent = await prisma.leadsParent.create({
     data: {
       name,
-      description,
+      description: description || null,
       tenantId: session.tenantId,
       createdBy: session.name || session.email,
     },

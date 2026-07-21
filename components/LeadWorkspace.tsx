@@ -118,7 +118,9 @@ export default function LeadWorkspace() {
 
   const loadBatches = () => fetch('/api/batches').then(r => r.json()).then(setBatches);
   const loadPresets = () => fetch('/api/filter-presets').then(r => r.json()).then(setPresets);
-  const loadLeadLists = useCallback(() => fetch('/api/leads-parents').then(r => r.json()).then(d => {
+  const loadLeadLists = useCallback(() => fetch('/api/leads-parents').then(r => r.text()).then(t => {
+    try { return JSON.parse(t); } catch { return []; }
+  }).then(d => {
     if (Array.isArray(d)) setLeadLists(d);
   }), []);
 
@@ -212,9 +214,10 @@ export default function LeadWorkspace() {
       const r = await fetch('/api/leads-parents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newLeadListName.trim(), description: newLeadListDesc.trim() || undefined }),
+        body: JSON.stringify({ name: newLeadListName.trim(), description: newLeadListDesc.trim() || null }),
       });
-      const d = await r.json();
+      const text = await r.text();
+      const d = text ? JSON.parse(text) : {};
       if (r.ok) {
         setNotice(`Created Lead List: ${newLeadListName.trim()}`);
         setNewLeadListName('');
@@ -222,7 +225,7 @@ export default function LeadWorkspace() {
         setShowCreateList(false);
         loadLeadLists();
       } else {
-        setNotice(d.error || 'Failed to create list');
+        setNotice(d.error || `Failed to create list (${r.status})`);
       }
     } catch (e: any) {
       setNotice(`Error: ${e.message}`);
