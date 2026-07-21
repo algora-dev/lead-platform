@@ -27,21 +27,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body>
-        {isLoginPage || isV2 ? (
+        {isLoginPage ? (
           children
         ) : (
           <>
             <header className="site-header">
-              <Link href="/" className="brand">
+              <Link href="/v2" className="brand">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/t3labs-logo.png" alt={`${b.businessName} logo`} className="brand-logo" />
                 <span className="brand-name">{b.productName}</span>
               </Link>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <nav className="site-nav">
-                  <Link href="/">Dashboard</Link>
-                  <Link href="/scan">Scan</Link>
-                  <Link href="/leads">Leads</Link>
+                  <Link href="/v2/product-profiles">Product Profiles</Link>
+                  <Link href="/v2/customer-profiles">Customer Profiles</Link>
+                  <Link href="/v2/scans">Scans</Link>
+                  <Link href="/v2/libraries">Libraries</Link>
+                  <Link href="/v2/companies">Companies</Link>
                 </nav>
                 {user && <HeaderUser user={user} />}
               </div>
