@@ -131,7 +131,8 @@ export default function SourceWorkspace() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const d = await r.json();
+      let d;
+      try { d = await r.json(); } catch { d = { error: `Server returned ${r.status} — scan may have timed out` }; }
       if (r.ok) {
         setNotice(d.output || 'Scan complete');
         loadRuns();

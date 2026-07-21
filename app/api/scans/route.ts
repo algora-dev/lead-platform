@@ -5,6 +5,8 @@ import { runMultiSourceScan } from '@/lib/pipeline/multi-source-scan';
 import { getAvailableSources } from '@/lib/sources/registry';
 import type { ScanProfileConfig } from '@/lib/pipeline/scan-profile';
 
+export const maxDuration = 60;
+
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
