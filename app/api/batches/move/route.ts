@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 
 /**
  * Move batches (scans) between Leads Parents.
@@ -22,14 +22,14 @@ export async function POST(req: NextRequest) {
   // Verify target parent exists (if not null)
   if (leadsParentId !== null) {
     const parent = await prisma.leadsParent.findFirst({
-      where: { id: leadsParentId, tenantId: session.tenantId },
+      where: { id: leadsParentId, tenantId: getTenantId(session) },
     });
     if (!parent) return NextResponse.json({ error: 'Target parent not found' }, { status: 404 });
   }
 
   // Move batches
   const result = await prisma.batch.updateMany({
-    where: { id: { in: batchIds }, tenantId: session.tenantId },
+    where: { id: { in: batchIds }, tenantId: getTenantId(session) },
     data: { leadsParentId },
   });
 

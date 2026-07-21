@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 import { normalizeCompany, companyScore } from '@/lib/pipeline/intelligence';
 import type { ScanProfileConfig } from '@/lib/pipeline/scan-profile';
 
@@ -214,7 +214,7 @@ export async function POST(req: NextRequest) {
   let profileConfig: ScanProfileConfig | null = null;
   if (profileId) {
     const profile = await prisma.scanProfile.findFirst({
-      where: { id: profileId, tenantId: session.tenantId },
+      where: { id: profileId, tenantId: getTenantId(session) },
     });
     if (profile) {
       profileConfig = profile.config as unknown as ScanProfileConfig;
@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
     const batch = await prisma.batch.create({
       data: {
         name: batchName,
-        tenantId: session.tenantId,
+        tenantId: getTenantId(session),
         profileId: profileId || null,
       },
     });
@@ -255,7 +255,7 @@ export async function POST(req: NextRequest) {
       
       // Check for existing company
       let company = await prisma.company.findFirst({
-        where: { normalizedName: norm, country, tenantId: session.tenantId },
+        where: { normalizedName: norm, country, tenantId: getTenantId(session) },
       });
       
       if (company) {
@@ -300,7 +300,7 @@ export async function POST(req: NextRequest) {
             employeeRange: u.employeeRange || null,
             employeeCount: employeeCount,
             notes: u.notes || null,
-            tenantId: session.tenantId,
+            tenantId: getTenantId(session),
           },
         });
         stats.created++;

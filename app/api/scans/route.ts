@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 import { runMultiSourceScan } from '@/lib/pipeline/multi-source-scan';
 import { getAvailableSources } from '@/lib/sources/registry';
 import type { ScanProfileConfig } from '@/lib/pipeline/scan-profile';
@@ -11,7 +11,7 @@ export async function GET() {
 
   return NextResponse.json(
     await prisma.scanRun.findMany({
-      where: { tenantId: session.tenantId },
+      where: { tenantId: getTenantId(session) },
       orderBy: { startedAt: 'desc' },
       take: 30,
       include: {
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   const profile = await prisma.scanProfile.findFirst({
-    where: { id: profileId, tenantId: session.tenantId, isActive: true },
+    where: { id: profileId, tenantId: getTenantId(session), isActive: true },
   });
 
   if (!profile) {
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       scanArea,
       sources: sourcesToUse,
       profileConfig,
-      tenantId: session.tenantId,
+      tenantId: getTenantId(session),
       userId: undefined,
       userName: session.name || session.email,
       batchId: isRescan ? rescanBatchId : batchId,

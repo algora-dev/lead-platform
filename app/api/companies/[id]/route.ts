@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -11,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // Verify ownership
   const existing = await prisma.company.findFirst({
-    where: { id: Number(id), tenantId: session.tenantId },
+    where: { id: Number(id), tenantId: getTenantId(session) },
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -29,7 +29,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const existing = await prisma.company.findFirst({
-    where: { id: Number(id), tenantId: session.tenantId },
+    where: { id: Number(id), tenantId: getTenantId(session) },
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

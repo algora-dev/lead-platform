@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const ids = searchParams.get('ids');
 
   const where: any = {
-    tenantId: session.tenantId,
+    tenantId: getTenantId(session),
     discarded: false,
   };
   if (ids) {

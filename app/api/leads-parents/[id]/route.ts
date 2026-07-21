@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 
 export async function GET(
   _req: NextRequest,
@@ -12,7 +12,7 @@ export async function GET(
   const { id } = await params;
 
   const parent = await prisma.leadsParent.findFirst({
-    where: { id: parseInt(id), tenantId: session.tenantId },
+    where: { id: parseInt(id), tenantId: getTenantId(session) },
     include: {
       batches: {
         select: {
@@ -45,7 +45,7 @@ export async function PATCH(
   const { name, description } = await req.json();
 
   const parent = await prisma.leadsParent.updateMany({
-    where: { id: parseInt(id), tenantId: session.tenantId },
+    where: { id: parseInt(id), tenantId: getTenantId(session) },
     data: { name, description },
   });
 
@@ -63,7 +63,7 @@ export async function DELETE(
   const { id } = await params;
 
   await prisma.leadsParent.deleteMany({
-    where: { id: parseInt(id), tenantId: session.tenantId },
+    where: { id: parseInt(id), tenantId: getTenantId(session) },
   });
 
   return NextResponse.json({ ok: true });

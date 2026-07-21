@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 import { slugifyProfile, SALES_OUTREACH_PROFILE, CONSTRUCTION_QUOTING_PROFILE } from '@/lib/pipeline/scan-profile';
 
 export async function GET() {
@@ -8,7 +8,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const profiles = await prisma.scanProfile.findMany({
-    where: { tenantId: session.tenantId },
+    where: { tenantId: getTenantId(session) },
     orderBy: { createdAt: 'asc' },
     include: { _count: { select: { scanRuns: true } } },
   });
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   // Seed defaults if requested
   if (body.seed === true) {
-    return await seedDefaults(session.tenantId);
+    return await seedDefaults(getTenantId(session));
   }
 
   const { name, description, config } = body;
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   // Check slug uniqueness
   const existing = await prisma.scanProfile.findFirst({
-    where: { tenantId: session.tenantId, slug },
+    where: { tenantId: getTenantId(session), slug },
   });
   if (existing) {
     return NextResponse.json({ error: 'A profile with that name already exists' }, { status: 409 });
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       slug,
       description: description || null,
       config: config as any as object,
-      tenantId: session.tenantId,
+      tenantId: getTenantId(session),
     },
   });
 

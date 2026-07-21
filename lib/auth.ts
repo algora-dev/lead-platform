@@ -78,4 +78,9 @@ export async function authenticateUser(email: string, password: string): Promise
   };
 }
 
+/** Resolve tenantId from session with Vercel-safe fallback. */
+export function getTenantId(session: SessionUser | null): number {
+  return session?.tenantId || Number(process.env.TENANT_ID) || 1;
+}
+
 export { COOKIE_NAME };

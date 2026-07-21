@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 
 export async function PATCH(req: NextRequest) {
   const session = await getSession();
@@ -14,7 +14,7 @@ export async function PATCH(req: NextRequest) {
 
   // Verify ownership
   const companies = await prisma.company.findMany({
-    where: { id: { in: ids }, tenantId: session.tenantId },
+    where: { id: { in: ids }, tenantId: getTenantId(session) },
     select: { id: true, status: true },
   });
 

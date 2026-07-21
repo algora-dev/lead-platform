@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const sinceId = searchParams.get('sinceId'); // only return leads with firstSeenAt > this scan run's startedAt
 
   const where: any = {
-    tenantId: session.tenantId,
+    tenantId: getTenantId(session),
     discarded: false,
   };
   if (q) {
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   if (batchId) where.batches = { some: { id: Number(batchId) } };
   if (sinceId) {
     const scanRun = await prisma.scanRun.findFirst({
-      where: { id: Number(sinceId), tenantId: session.tenantId },
+      where: { id: Number(sinceId), tenantId: getTenantId(session) },
       select: { startedAt: true },
     });
     if (scanRun) {
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   const data = await req.json();
   const company = await prisma.company.create({
-    data: { ...data, tenantId: session.tenantId },
+    data: { ...data, tenantId: getTenantId(session) },
   });
   return NextResponse.json(company);
 }

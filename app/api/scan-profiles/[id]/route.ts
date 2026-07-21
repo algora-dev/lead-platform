@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 import { slugifyProfile } from '@/lib/pipeline/scan-profile';
 
 export async function GET(
@@ -12,7 +12,7 @@ export async function GET(
 
   const { id } = await params;
   const profile = await prisma.scanProfile.findFirst({
-    where: { id: parseInt(id), tenantId: session.tenantId },
+    where: { id: parseInt(id), tenantId: getTenantId(session) },
     include: { _count: { select: { scanRuns: true } } },
   });
 
@@ -33,7 +33,7 @@ export async function PUT(
   const body = await req.json();
 
   const existing = await prisma.scanProfile.findFirst({
-    where: { id, tenantId: session.tenantId },
+    where: { id, tenantId: getTenantId(session) },
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -65,7 +65,7 @@ export async function DELETE(
   const id = parseInt(idStr);
 
   const existing = await prisma.scanProfile.findFirst({
-    where: { id, tenantId: session.tenantId },
+    where: { id, tenantId: getTenantId(session) },
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

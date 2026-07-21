@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession, getTenantId } from '@/lib/auth';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Verify ownership
   const company = await prisma.company.findFirst({
-    where: { id: Number(id), tenantId: session.tenantId },
+    where: { id: Number(id), tenantId: getTenantId(session) },
     select: { id: true },
   });
   if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Verify ownership
   const company = await prisma.company.findFirst({
-    where: { id: Number(id), tenantId: session.tenantId },
+    where: { id: Number(id), tenantId: getTenantId(session) },
     select: { id: true, status: true },
   });
   if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 });
