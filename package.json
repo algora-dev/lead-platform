@@ -8,7 +8,9 @@
     "start": "next start",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "test:python": "python -m unittest discover -s tests"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:python:deprecated": "echo 'Python tests retired — use npm test' && exit 1"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
@@ -29,6 +31,7 @@
     "@types/react-dom": "^19.0.0",
     "prisma": "^6.5.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.10"
   }
 }
