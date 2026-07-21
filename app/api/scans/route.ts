@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
-import { runScan } from '@/lib/pipeline/pipeline';
+import { runMultiSourceScan } from '@/lib/pipeline/multi-source-scan';
+import { getAvailableSources } from '@/lib/sources/registry';
 import type { ScanProfileConfig } from '@/lib/pipeline/scan-profile';
 
 export async function GET() {
@@ -15,7 +16,7 @@ export async function GET() {
       take: 30,
       include: {
         profile: { select: { id: true, name: true, slug: true } },
-        batch: { select: { id: true, name: true } },
+        batch: { select: { id: true, name: true, scanArea: true, leadsParentId: true } },
       },
     })
   );
@@ -25,10 +26,23 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { profileId, country, batchId, createBatch, batchName, rescanBatchId } = await req.json();
+  const {
+    profileId,
+    scanName,
+    scanArea,
+    sources,
+    leadsParentId,
+    batchId,
+    isRescan,
+    rescanBatchId,
+  } = await req.json();
 
   if (!profileId) {
     return NextResponse.json({ error: 'profileId is required' }, { status: 400 });
+  }
+
+  if (!scanArea) {
+    return NextResponse.json({ error: 'scanArea is required' }, { status: 400 });
   }
 
   const profile = await prisma.scanProfile.findFirst({
@@ -40,72 +54,41 @@ export async function POST(req: NextRequest) {
   }
 
   const profileConfig = profile.config as unknown as ScanProfileConfig;
-  const scanCountry = country || profileConfig.brave.countries[0] || 'UK';
 
-  if (!profileConfig.brave.countries.includes(scanCountry)) {
+  // Default to all available sources if not specified
+  const availableSources = getAvailableSources().map(s => s.id);
+  const sourcesToUse = sources && sources.length > 0 ? sources : availableSources;
+
+  // Validate requested sources are available
+  const invalidSources = sourcesToUse.filter((s: string) => !availableSources.includes(s));
+  if (invalidSources.length > 0) {
     return NextResponse.json(
-      { error: `Country ${scanCountry} not in profile's allowed countries` },
+      { error: `Sources not available: ${invalidSources.join(', ')}` },
       { status: 400 }
     );
   }
 
-  // Auto-create batch if requested
-  let effectiveBatchId = batchId || (rescanBatchId ?? undefined);
-  if (createBatch && !effectiveBatchId) {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-    const name = batchName || `${profile.name} — ${scanCountry} ${dateStr}`;
-    const batch = await prisma.batch.create({
-      data: {
-        name,
-        tenantId: session.tenantId,
-        profileId: profile.id,
-      },
-    });
-    effectiveBatchId = batch.id;
-  }
-
-  // For rescan: count existing companies in batch before scan
-  let existingCount = 0;
-  if (rescanBatchId) {
-    existingCount = await prisma.company.count({
-      where: { batches: { some: { id: rescanBatchId } } } });
-  }
-
   try {
-    const { message, stats } = await runScan(
-      scanCountry,
-      session.tenantId,
+    const result = await runMultiSourceScan({
+      scanName: scanName || `${profile.name} — ${scanArea}`,
+      scanArea,
+      sources: sourcesToUse,
       profileConfig,
-      profile.id,
-      undefined,
-      effectiveBatchId
-    );
-
-    // Link scan run to batch
-    if (effectiveBatchId) {
-      const scanRuns = await prisma.scanRun.findMany({
-        where: { tenantId: session.tenantId, profileId: profile.id },
-        orderBy: { startedAt: 'desc' },
-        take: 1,
-      });
-      if (scanRuns[0]) {
-        // We need to add batchId to ScanRun — but schema doesn't have it yet
-        // For now, store in the message
-      }
-    }
+      tenantId: session.tenantId,
+      userId: undefined,
+      userName: session.name || session.email,
+      batchId: isRescan ? rescanBatchId : batchId,
+      leadsParentId,
+      isRescan: !!isRescan,
+      rescanBatchId,
+    });
 
     return NextResponse.json({
       ok: true,
-      output: message,
-      stats,
-      batchId: effectiveBatchId,
-      rescan: rescanBatchId ? {
-        batchId: rescanBatchId,
-        existingBefore: existingCount,
-        newCompanies: stats.companiesCreated,
-        updatedCompanies: stats.companiesUpdated,
-      } : undefined,
+      output: result.message,
+      stats: result.stats,
+      batchId: result.batchId,
+      scanRunId: result.scanRunId,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

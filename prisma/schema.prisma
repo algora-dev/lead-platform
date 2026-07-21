@@ -25,6 +25,7 @@ model Tenant {
   scanRuns    ScanRun[]
   scanProfiles ScanProfile[]
   filterPresets FilterPreset[]
+  leadsParents LeadsParent[]
 }
 
 model User {
@@ -84,6 +85,7 @@ model Company {
   jobs                  JobAdvert[]
   batches               Batch[]
   contactLogs           ContactLog[]
+  scanLeadFlags         ScanLeadFlag[]
   @@unique([tenantId, normalizedName, country])
 }
 
@@ -116,12 +118,19 @@ model Batch {
   tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   profileId   Int?
   profile     ScanProfile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  leadsParentId Int?
+  leadsParent   LeadsParent? @relation(fields: [leadsParentId], references: [id], onDelete: SetNull)
   name        String
+  scanArea    String?
+  createdBy   String?
+  originalScanDate DateTime @default(now())
+  lastScanDate DateTime?
   createdAt   DateTime  @default(now())
   archivedAt  DateTime?
   notes       String?
   companies   Company[]
   scanRuns    ScanRun[]
+  scanLeadFlags ScanLeadFlag[]
 }
 
 model ScanProfile {
@@ -149,7 +158,7 @@ model ScanRun {
   batchId            Int?
   batch              Batch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
   source             String
-  country            String
+  scanArea           String?
   startedAt          DateTime  @default(now())
   completedAt        DateTime?
   status             String    @default("RUNNING")
@@ -164,6 +173,9 @@ model ScanRun {
   contactsFound      Int       @default(0)
   errors             Int       @default(0)
   message            String?
+  isRescan           Boolean   @default(false)
+  newCompanies       Int       @default(0)
+  updatedCompanies   Int       @default(0)
 }
 
 model ContactLog {
@@ -187,4 +199,31 @@ model FilterPreset {
   name        String
   config      Json
   @@unique([tenantId, name])
+}
+
+model LeadsParent {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenantId    Int
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  createdBy   String?
+  batches     Batch[]
+  @@unique([tenantId, name])
+}
+
+model ScanLeadFlag {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  companyId   Int
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  batchId     Int
+  batch       Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  flagType    String    @default("NEW")
+  previousScore Int?
+  newScore    Int?
+  acknowledged Boolean  @default(false)
+  @@unique([companyId, batchId, flagType])
 }

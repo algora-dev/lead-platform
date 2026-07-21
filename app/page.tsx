@@ -163,7 +163,7 @@ export default async function Home() {
                       {s.status}
                     </span>
                     <div>
-                      <strong>{s.country}</strong>
+                      <strong>{s.scanArea || '—'}</strong>
                       <div className="muted" style={{ fontSize: '0.8rem' }}>
                         {new Date(s.startedAt).toLocaleDateString()} · {s.advertsSaved} adverts · {s.companiesCreated} new
                       </div>

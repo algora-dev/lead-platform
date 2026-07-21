@@ -43,14 +43,14 @@ export async function runScan(
 
   // Determine deep offset based on prior scan count for this profile
   const priorScans = await prisma.scanRun.count({
-    where: { country, tenantId, profileId },
+    where: { scanArea: country, tenantId, profileId },
   });
   const deep = 1 + (priorScans % 9);
 
   const scanRun = await prisma.scanRun.create({
     data: {
       source: 'BRAVE',
-      country,
+      scanArea: country,
       status: 'RUNNING',
       deepOffset: deep,
       tenantId,
