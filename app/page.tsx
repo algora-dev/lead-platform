@@ -1,11 +1,15 @@
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { isV2Enabled } from '@/lib/v2/feature-flag';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
+  // Redirect to V2 when enabled
+  if (await isV2Enabled()) redirect('/v2');
+
   const session = await getSession();
   if (!session) redirect('/login');
 
