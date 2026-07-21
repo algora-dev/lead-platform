@@ -39,7 +39,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <nav className="site-nav">
                   <Link href="/">Dashboard</Link>
-                  <Link href="/scan">New Scan</Link>
+                  <Link href="/scan">Scan</Link>
                   <Link href="/leads">Leads</Link>
                 </nav>
                 {user && <HeaderUser user={user} />}
