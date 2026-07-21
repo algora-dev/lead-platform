@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 
 type Job = {
@@ -43,10 +43,25 @@ type Company = {
 type Batch = {
   id: number;
   name: string;
+  scanArea: string | null;
+  createdBy: string | null;
+  originalScanDate: string;
+  lastScanDate: string | null;
   createdAt: string;
   archivedAt?: string;
   notes?: string;
-  _count: { companies: number };
+  _count: { companies: number; scanRuns: number };
+};
+
+type LeadList = {
+  id: number;
+  name: string;
+  description: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  batches?: Batch[];
+  _count?: { batches: number };
 };
 
 type FilterPreset = {
@@ -57,10 +72,15 @@ type FilterPreset = {
 
 const statuses = ['NEW', 'REVIEWING', 'CONTACTED', 'FOLLOW_UP', 'MEETING', 'ASSESSMENT', 'WON', 'PASSED', 'NO_RESPONSE', 'NOT_INTERESTED'];
 
+type View = 'lists' | 'all-leads' | 'list-detail';
+
 export default function LeadWorkspace() {
+  const [view, setView] = useState<View>('lists');
   const [items, setItems] = useState<Company[]>([]);
+  const [leadLists, setLeadLists] = useState<LeadList[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [presets, setPresets] = useState<FilterPreset[]>([]);
+  const [selectedList, setSelectedList] = useState<LeadList | null>(null);
   const [selected, setSelected] = useState<Company | null>(null);
   const [q, setQ] = useState('');
   const [min, setMin] = useState(0);
@@ -94,9 +114,12 @@ export default function LeadWorkspace() {
 
   const loadBatches = () => fetch('/api/batches').then(r => r.json()).then(setBatches);
   const loadPresets = () => fetch('/api/filter-presets').then(r => r.json()).then(setPresets);
+  const loadLeadLists = useCallback(() => fetch('/api/leads-parents').then(r => r.json()).then(d => {
+    if (Array.isArray(d)) setLeadLists(d);
+  }), []);
 
-  useEffect(() => { load(); }, [q, min, contact, multi, statusFilter, batchFilter]);
-  useEffect(() => { loadBatches(); loadPresets(); }, []);
+  useEffect(() => { loadLeadLists(); loadBatches(); loadPresets(); }, [loadLeadLists]);
+  useEffect(() => { if (view === 'all-leads') load(); }, [q, min, contact, multi, statusFilter, batchFilter]);
 
   const filtered = items;
 
@@ -177,6 +200,215 @@ export default function LeadWorkspace() {
 
   const all = useMemo(() => filtered.length > 0 && filtered.every(x => checked.includes(x.id)), [filtered, checked]);
 
+  // --- Lead List helpers ---
+  const createLeadList = async () => {
+    const name = prompt('Lead List name:');
+    if (!name) return;
+    const desc = prompt('Description (optional):') || '';
+    const r = await fetch('/api/leads-parents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description: desc }),
+    });
+    if (r.ok) { setNotice(`Created Lead List: ${name}`); loadLeadLists(); }
+  };
+
+  const deleteLeadList = async (id: number) => {
+    if (!confirm('Delete this Lead List? Scans inside will be unparented, not deleted.')) return;
+    await fetch('/api/leads-parents/' + id, { method: 'DELETE' });
+    setSelectedList(null);
+    loadLeadLists();
+  };
+
+  const openList = async (id: number) => {
+    const d = await fetch('/api/leads-parents/' + id).then(r => r.json());
+    setSelectedList(d);
+    setView('list-detail');
+  };
+
+  // --- Tab bar ---
+  const tabBtn = (id: View, label: string) => (
+    <button
+      onClick={() => setView(id)}
+      style={{
+        padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
+        fontWeight: view === id ? 600 : 400,
+        borderBottom: view === id ? '2px solid #d7ff00' : '2px solid transparent',
+        fontSize: 14,
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  // --- Lead Lists View ---
+  if (view === 'lists') {
+    return (
+      <>
+        <div className="page-header">
+          <h1>Leads</h1>
+          <p>Group your scans into Lead Lists. Run scans into a list, then filter and manage leads.</p>
+        </div>
+
+        <div className="tab-bar" style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid #e5e7eb' }}>
+          {tabBtn('lists', 'Lead Lists')}
+          {tabBtn('all-leads', 'All Leads')}
+        </div>
+
+        <div className="card">
+          <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2>Lead Lists</h2>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Link href="/scan" className="button primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }}>+ New Scan</Link>
+              <button className="secondary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={createLeadList}>+ New List</button>
+            </div>
+          </div>
+          <div style={{ overflow: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>List Name</th>
+                  <th>Scans</th>
+                  <th>Created By</th>
+                  <th>Created</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leadLists.map(l => (
+                  <tr key={l.id} style={{ cursor: 'pointer' }} onClick={() => openList(l.id)}>
+                    <td>
+                      <strong>{l.name}</strong>
+                      {l.description && <div className="muted" style={{ fontSize: 12 }}>{l.description}</div>}
+                    </td>
+                    <td>{l._count?.batches || 0}</td>
+                    <td>{l.createdBy || '—'}</td>
+                    <td>{new Date(l.createdAt).toLocaleDateString()}</td>
+                    <td>{new Date(l.updatedAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!leadLists.length && (
+              <div className="empty">
+                <p>No Lead Lists yet.</p>
+                <p style={{ marginTop: 8 }}>
+                  <button className="primary" onClick={createLeadList}>Create your first Lead List</button>
+                  {' '}or{' '}
+                  <Link href="/scan">run a scan</Link>
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+        {notice && <div className="muted" style={{ marginTop: 8, textAlign: 'center' }}>{notice}</div>}
+      </>
+    );
+  }
+
+  // --- Lead List Detail View ---
+  if (view === 'list-detail' && selectedList) {
+    const [showMove, setShowMove] = useState(false);
+    const [checkedBatches, setCheckedBatches] = useState<number[]>([]);
+    const [moveTarget, setMoveTarget] = useState('');
+
+    return (
+      <>
+        <div className="page-header">
+          <h1>{selectedList.name}</h1>
+          {selectedList.description && <p className="muted">{selectedList.description}</p>}
+        </div>
+
+        <div className="tab-bar" style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid #e5e7eb' }}>
+          <button onClick={() => { setView('lists'); setSelectedList(null); }} style={{ padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 400, fontSize: 14 }}>← Back to Lists</button>
+        </div>
+
+        <div className="card">
+          <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2>Scans in this List</h2>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Link href="/scan" className="button primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }}>+ Run New Scan</Link>
+              <button className="secondary" style={{ fontSize: '0.85rem', color: '#dc2626' }} onClick={() => deleteLeadList(selectedList.id)}>Delete List</button>
+            </div>
+          </div>
+
+          {checkedBatches.length > 0 && (
+            <div className="toolbar" style={{ background: 'var(--soft)', padding: 8, borderRadius: 6, marginBottom: 8 }}>
+              <strong>{checkedBatches.length} scans selected</strong>
+              <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => setShowMove(!showMove)}>Move to…</button>
+              <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => setCheckedBatches([])}>Clear</button>
+              {showMove && (
+                <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <select value={moveTarget} onChange={e => setMoveTarget(e.target.value)} style={{ padding: '6px' }}>
+                    <option value="">— Unparent —</option>
+                    {leadLists.filter(l => l.id !== selectedList.id).map(l => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                  <button className="primary" style={{ fontSize: '0.85rem' }} onClick={async () => {
+                    await fetch('/api/batches/move', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ batchIds: checkedBatches, leadsParentId: moveTarget ? parseInt(moveTarget) : null }),
+                    });
+                    setCheckedBatches([]); setShowMove(false); setMoveTarget('');
+                    openList(selectedList.id);
+                  }}>Move</button>
+                </span>
+              )}
+            </div>
+          )}
+
+          <div style={{ overflow: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Scan Name</th>
+                  <th>Area</th>
+                  <th>By</th>
+                  <th>Companies</th>
+                  <th>Runs</th>
+                  <th>First Scan</th>
+                  <th>Last Scan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedList.batches?.map(b => (
+                  <tr key={b.id} style={{ cursor: 'pointer' }} onClick={() => { setBatchFilter(String(b.id)); setView('all-leads'); }}>
+                    <td onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={checkedBatches.includes(b.id)}
+                        onChange={e => setCheckedBatches(prev =>
+                          e.target.checked ? [...prev, b.id] : prev.filter(id => id !== b.id)
+                        )}
+                      />
+                    </td>
+                    <td><strong>{b.name}</strong></td>
+                    <td>{b.scanArea || '—'}</td>
+                    <td>{b.createdBy || '—'}</td>
+                    <td>{b._count.companies}</td>
+                    <td>{b._count.scanRuns}</td>
+                    <td>{new Date(b.originalScanDate).toLocaleDateString()}</td>
+                    <td>{b.lastScanDate ? new Date(b.lastScanDate).toLocaleDateString() : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!selectedList.batches?.length && (
+              <div className="empty">
+                <p>No scans in this list yet.</p>
+                <Link href="/scan" className="button primary" style={{ fontSize: '0.85rem' }}>Run a scan into this list</Link>
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // --- All Leads View ---
   return (
     <>
       <div className="page-header">
@@ -184,12 +416,15 @@ export default function LeadWorkspace() {
         <p>Search, filter and manage your lead pipeline.</p>
       </div>
 
+      <div className="tab-bar" style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid #e5e7eb' }}>
+        {tabBtn('lists', 'Lead Lists')}
+        {tabBtn('all-leads', 'All Leads')}
+      </div>
+
       {/* Filter Presets */}
       {presets.length > 0 && (
         <div className="card" style={{ marginBottom: 12 }}>
-          <div className="card-head">
-            <h2>Filter Presets</h2>
-          </div>
+          <div className="card-head"><h2>Filter Presets</h2></div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {presets.map(p => (
               <span key={p.id} className="pill neutral" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', cursor: 'pointer' }} onClick={() => applyPreset(p)}>
@@ -201,13 +436,10 @@ export default function LeadWorkspace() {
         </div>
       )}
 
-      {/* Batches */}
+      {/* Quick batch filter */}
       {batches.length > 0 && (
         <div className="card" style={{ marginBottom: 12 }}>
-          <div className="card-head">
-            <h2>Batches</h2>
-            <Link href="/scan" className="button secondary" style={{ fontSize: '0.8rem', padding: '6px 12px' }}>New Scan</Link>
-          </div>
+          <div className="card-head"><h2>Scans</h2></div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {batches.map(b => (
               <span
@@ -256,7 +488,6 @@ export default function LeadWorkspace() {
           </button>
         </div>
 
-        {/* Save preset dialog */}
         {showSavePreset && (
           <div className="card" style={{ marginBottom: 12, background: 'var(--soft)' }}>
             <div className="toolbar">
@@ -273,7 +504,6 @@ export default function LeadWorkspace() {
           </div>
         )}
 
-        {/* Save list dialog */}
         {showSaveList && (
           <div className="card" style={{ marginBottom: 12, background: 'var(--soft)' }}>
             <div className="toolbar">
@@ -290,7 +520,6 @@ export default function LeadWorkspace() {
           </div>
         )}
 
-        {/* Bulk status dialog */}
         {showBulkStatus && (
           <div className="card" style={{ marginBottom: 12, background: 'var(--soft)' }}>
             <h3 style={{ margin: '0 0 8px 0' }}>Bulk Update {checked.length} leads</h3>
@@ -313,7 +542,6 @@ export default function LeadWorkspace() {
           </div>
         )}
 
-        {/* Action bar for checked items */}
         {checked.length > 0 && (
           <div className="toolbar" style={{ background: 'var(--soft)', padding: 8, borderRadius: 6, marginBottom: 8 }}>
             <strong>{checked.length} selected</strong>
@@ -324,14 +552,12 @@ export default function LeadWorkspace() {
           </div>
         )}
 
-        {/* Export all */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
           <button className="secondary" style={{ fontSize: '0.85rem', padding: '6px 12px' }} onClick={() => exportCSV(false)}>
             Export CSV ({filtered.length})
           </button>
         </div>
 
-        {/* Table */}
         <div style={{ overflow: 'auto', maxHeight: '60vh' }}>
           <table>
             <thead>
@@ -398,7 +624,7 @@ export default function LeadWorkspace() {
               ))}
             </tbody>
           </table>
-          {!filtered.length && <div className="empty">No leads match these filters.</div>}
+          {!filtered.length && <div className="empty">No leads match these filters. Run a scan or adjust your filters.</div>}
         </div>
 
         {notice && <div className="muted" style={{ marginTop: 8, textAlign: 'center' }}>{notice}</div>}
