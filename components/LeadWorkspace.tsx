@@ -102,6 +102,11 @@ export default function LeadWorkspace() {
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkNote, setBulkNote] = useState('');
 
+  // Lead List Detail view state (must be top-level for Rules of Hooks)
+  const [showMove, setShowMove] = useState(false);
+  const [checkedBatches, setCheckedBatches] = useState<number[]>([]);
+  const [moveTarget, setMoveTarget] = useState('');
+
   const buildQuery = () => {
     const p = new URLSearchParams({ q, minScore: String(min) });
     if (contact) p.set('contactable', '1');
@@ -367,10 +372,6 @@ export default function LeadWorkspace() {
 
   // --- Lead List Detail View ---
   if (view === 'list-detail' && selectedList) {
-    const [showMove, setShowMove] = useState(false);
-    const [checkedBatches, setCheckedBatches] = useState<number[]>([]);
-    const [moveTarget, setMoveTarget] = useState('');
-
     return (
       <>
         <div className="page-header">
