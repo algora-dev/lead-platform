@@ -2,12 +2,16 @@ import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 
+function tenantId(session: { tenantId?: number }) {
+  return session.tenantId || Number(process.env.TENANT_ID) || 1;
+}
+
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const parents = await prisma.leadsParent.findMany({
-    where: { tenantId: session.tenantId },
+    where: { tenantId: tenantId(session) },
     orderBy: { updatedAt: 'desc' },
     include: {
       batches: {
@@ -44,7 +48,7 @@ export async function POST(req: NextRequest) {
     data: {
       name,
       description: description || null,
-      tenantId: session.tenantId,
+      tenantId: tenantId(session),
       createdBy: session.name || session.email,
     },
   });
