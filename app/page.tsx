@@ -225,6 +225,12 @@ export default async function Home() {
           </div>
         </div>
       </div>
+
+      {process.env.V2_ENABLED === 'true' && (
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
+          <Link href="/v2" className="button secondary" style={{ fontSize: '0.85rem' }}>V2 Platform →</Link>
+        </div>
+      )}
     </>
   );
 }

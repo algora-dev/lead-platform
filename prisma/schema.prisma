@@ -26,6 +26,12 @@ model Tenant {
   scanProfiles ScanProfile[]
   filterPresets FilterPreset[]
   leadsParents LeadsParent[]
+  // V2 relations
+  productProfiles   ProductProfile[]
+  customerProfiles  CustomerProfile[]
+  discoveryStrategies DiscoveryStrategy[]
+  scanLibraries     ScanLibrary[]
+  discoveryScans    DiscoveryScan[]
 }
 
 model User {
@@ -86,6 +92,13 @@ model Company {
   batches               Batch[]
   contactLogs           ContactLog[]
   scanLeadFlags         ScanLeadFlag[]
+  // V2 relations
+  scanCandidates        ScanCandidate[]
+  companyAliases        CompanyAlias[]
+  providerIdentities    CompanyProviderIdentity[]
+  evidenceItems         EvidenceItem[]
+  evidenceClaims        EvidenceClaim[]
+  assessmentSnapshots   AssessmentSnapshot[]
   @@unique([tenantId, normalizedName, country])
 }
 
@@ -226,4 +239,353 @@ model ScanLeadFlag {
   newScore    Int?
   acknowledged Boolean  @default(false)
   @@unique([companyId, batchId, flagType])
+}
+
+// ============================================================
+// V2 — Additive tables (do not modify V1 tables)
+// ============================================================
+
+// --- Product & Customer Profiles ---
+
+model ProductProfile {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenantId    Int
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  archivedAt  DateTime?
+  versions    ProductProfileVersion[]
+  @@unique([tenantId, name])
+}
+
+model ProductProfileVersion {
+  id              Int       @id @default(autoincrement())
+  createdAt       DateTime  @default(now())
+  profileId       Int
+  profile         ProductProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  versionNumber   Int
+  // Structured fields from AI or manual entry
+  problemsSolved  String[]
+  outcomes        String[]
+  industries      String[]
+  keywords        String[]
+  technologies    String[]
+  companySizeMin  Int?
+  companySizeMax  Int?
+  pricingLevel    String?
+  exclusions      String[]
+  notes           String?
+  // Original user input preserved
+  rawInput        Json
+  // AI processing metadata
+  aiModel         String?
+  aiPromptVersion String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  @@unique([profileId, versionNumber])
+}
+
+model CustomerProfile {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenantId    Int
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  archivedAt  DateTime?
+  versions    CustomerProfileVersion[]
+  @@unique([tenantId, name])
+}
+
+model CustomerProfileVersion {
+  id                  Int       @id @default(autoincrement())
+  createdAt           DateTime  @default(now())
+  profileId           Int
+  profile             CustomerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  versionNumber       Int
+  industries          String[]
+  locations           String[]
+  employeeCountMin    Int?
+  employeeCountMax    Int?
+  revenueMin          Int?
+  revenueMax          Int?
+  technologies        String[]
+  operationalCharacteristics String[]
+  buyingSignals      String[]
+  hiringSignals      String[]
+  decisionMakers     String[]
+  exclusions         String[]
+  notes              String?
+  rawInput            Json
+  aiModel             String?
+  aiPromptVersion     String?
+  approvedBy          String?
+  approvedAt          DateTime?
+  @@unique([profileId, versionNumber])
+}
+
+// --- Discovery Strategy ---
+
+model DiscoveryStrategy {
+  id              Int       @id @default(autoincrement())
+  createdAt       DateTime  @default(now())
+  tenantId        Int
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Linked profile versions (immutable snapshot)
+  productProfileVersionIds  Int[]
+  customerProfileVersionIds Int[]
+  // Compiled strategy data
+  queries         Json      // search queries
+  keywords        String[]
+  inclusionFilters Json
+  exclusionFilters String[]
+  evidencePriorities String[]
+  enrichmentPriorities String[]
+  // Geography
+  country         String
+  stateProvince   String?
+  county          String?
+  city            String?
+  radiusKm        Int?
+  // Scoring policy
+  scoringPolicyVersion String
+  scoringConfig   Json
+  // AI metadata
+  aiModel         String?
+  aiPromptVersion String?
+  // Status
+  approved        Boolean   @default(false)
+  approvedBy      String?
+  approvedAt      DateTime?
+  scans           DiscoveryScan[]
+}
+
+// --- Scan Library ---
+
+model ScanLibrary {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  tenantId    Int
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  archivedAt  DateTime?
+  scans       DiscoveryScan[]
+  @@unique([tenantId, name])
+}
+
+// --- Discovery Scan ---
+
+enum DiscoveryScanStatus {
+  PENDING
+  DISCOVERING
+  EVIDENCE_GATHERING
+  SCORING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model DiscoveryScan {
+  id              Int       @id @default(autoincrement())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  tenantId        Int
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  libraryId       Int?
+  library         ScanLibrary? @relation(fields: [libraryId], references: [id], onDelete: SetNull)
+  strategyId      Int
+  strategy        DiscoveryStrategy @relation(fields: [strategyId], references: [id], onDelete: Restrict)
+  parentScanId    Int?      // for rescans
+  name            String
+  status          DiscoveryScanStatus @default(PENDING)
+  // Progress
+  progress        Int       @default(0)  // 0-100
+  // Modes
+  discoverNewOnly Boolean   @default(false)
+  recheckEvidence Boolean   @default(false)
+  rerunAll        Boolean   @default(false)
+  // Counts
+  candidateCount  Int       @default(0)
+  newCompanies    Int       @default(0)
+  updatedCompanies Int      @default(0)
+  // Cost tracking
+  totalCostUnits  Int       @default(0)
+  // Timestamps
+  startedAt       DateTime?
+  completedAt     DateTime?
+  errorMessage    String?
+  // Relations
+  candidates      ScanCandidate[]
+  providerRuns    ProviderRun[]
+  assessments     AssessmentSnapshot[]
+}
+
+// --- Scan Candidate ---
+
+model ScanCandidate {
+  id              Int       @id @default(autoincrement())
+  scanId          Int
+  scan            DiscoveryScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  companyId       Int
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Discovery provenance
+  discoveryProvider String
+  discoveryQuery    String?
+  discoveryUrl      String?
+  // Profile Score (frozen at discovery time)
+  profileScore      Int       @default(0)
+  profileScoreBreakdown Json?
+  // Processing state
+  evidenceGathered  Boolean   @default(false)
+  assessmentDone    Boolean   @default(false)
+  @@unique([scanId, companyId])
+}
+
+// --- Company Identity ---
+
+model CompanyAlias {
+  id          Int       @id @default(autoincrement())
+  companyId   Int
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  alias       String
+  source      String?
+  createdAt   DateTime  @default(now())
+  @@unique([companyId, alias])
+}
+
+model CompanyProviderIdentity {
+  id              Int       @id @default(autoincrement())
+  companyId       Int
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  provider        String    // e.g. 'apollo', 'companies_house'
+  providerId     String
+  rawPayload      Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  @@unique([provider, providerId])
+}
+
+// --- Evidence ---
+
+enum EvidenceType {
+  JOB_ADVERT
+  COMPANY_WEBSITE
+  APOLLO_DATA
+  TECH_STACK
+  CONTACT_INFO
+  NEWS_ARTICLE
+  FUNDING_EVENT
+  TENDER
+  REVIEW
+  SOCIAL_PROFILE
+  OTHER
+}
+
+model EvidenceItem {
+  id              Int       @id @default(autoincrement())
+  createdAt       DateTime  @default(now())
+  companyId       Int
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  scanId          Int?      // link to scan that discovered it
+  providerRunId   Int?
+  evidenceType    EvidenceType
+  sourceUrl       String?
+  sourceDomain    String?
+  // Content
+  rawPayload      Json?
+  contentHash     String?   // for deduplication
+  normalisedPayload Json?
+  // Quality
+  reliability     Int       @default(50)  // 0-100
+  freshnessDays   Int?      // age of source data
+  observedAt      DateTime?
+  collectedAt     DateTime  @default(now())
+  claims          EvidenceClaim[]
+  @@unique([companyId, evidenceType, sourceUrl])
+}
+
+enum ClaimType {
+  LOCATION
+  EMPLOYEE_COUNT
+  TECHNOLOGY
+  JOB_ADVERT
+  OPERATIONAL_ACTIVITY
+  FUNDING_EVENT
+  CONTACT_ROLE
+  REPEATED_SIGNAL
+  INDUSTRY
+  REVENUE
+}
+
+model EvidenceClaim {
+  id              Int       @id @default(autoincrement())
+  createdAt       DateTime  @default(now())
+  evidenceItemId  Int
+  evidenceItem    EvidenceItem @relation(fields: [evidenceItemId], references: [id], onDelete: Cascade)
+  companyId       Int
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  claimType       ClaimType
+  claimValue      String
+  claimData       Json?
+  // Support/contradict
+  supports        Boolean   @default(true)
+  contradictions  String[]
+  @@unique([evidenceItemId, claimType, claimValue])
+}
+
+// --- Provider Run ---
+
+model ProviderRun {
+  id              Int       @id @default(autoincrement())
+  createdAt       DateTime  @default(now())
+  scanId          Int
+  scan            DiscoveryScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  provider        String
+  providerVersion String?
+  role            String    // 'discovery' or 'evidence'
+  status          String    @default("PENDING")
+  attempts        Int       @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  requestCount    Int       @default(0)
+  resultCount     Int       @default(0)
+  costUnits       Int       @default(0)
+  errorMessage    String?
+}
+
+// --- Assessment Snapshot ---
+
+model AssessmentSnapshot {
+  id              Int       @id @default(autoincrement())
+  createdAt       DateTime  @default(now())
+  scanId          Int
+  scan            DiscoveryScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  companyId       Int
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  strategyId      Int
+  // Scores
+  profileScore    Int       @default(0)
+  confidenceScore Int       @default(0)
+  combinedScore   Int       @default(0)
+  // Breakdowns
+  profileBreakdown    Json?
+  confidenceBreakdown Json?
+  // Policy
+  scoringPolicyVersion String
+  combinedPolicyVersion String
+  // Explanation
+  aiSummary          String?
+  outreachRationale  String?
+  unknowns           String[]
+  contradictions     String[]
+  // Evidence links
+  evidenceItemIds    Int[]
+  // Prior comparison
+  priorSnapshotId    Int?
+  scoreChange        Int?   // combined score delta vs prior
 }
