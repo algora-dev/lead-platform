@@ -92,6 +92,10 @@ export default function LeadWorkspace() {
   const [notice, setNotice] = useState('');
   const [showSaveList, setShowSaveList] = useState(false);
   const [newListName, setNewListName] = useState('');
+  const [showCreateList, setShowCreateList] = useState(false);
+  const [newLeadListName, setNewLeadListName] = useState('');
+  const [newLeadListDesc, setNewLeadListDesc] = useState('');
+  const [creatingList, setCreatingList] = useState(false);
   const [showSavePreset, setShowSavePreset] = useState(false);
   const [presetName, setPresetName] = useState('');
   const [showBulkStatus, setShowBulkStatus] = useState(false);
@@ -202,15 +206,28 @@ export default function LeadWorkspace() {
 
   // --- Lead List helpers ---
   const createLeadList = async () => {
-    const name = prompt('Lead List name:');
-    if (!name) return;
-    const desc = prompt('Description (optional):') || '';
-    const r = await fetch('/api/leads-parents', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description: desc }),
-    });
-    if (r.ok) { setNotice(`Created Lead List: ${name}`); loadLeadLists(); }
+    if (!newLeadListName.trim()) return;
+    setCreatingList(true);
+    try {
+      const r = await fetch('/api/leads-parents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newLeadListName.trim(), description: newLeadListDesc.trim() || undefined }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setNotice(`Created Lead List: ${newLeadListName.trim()}`);
+        setNewLeadListName('');
+        setNewLeadListDesc('');
+        setShowCreateList(false);
+        loadLeadLists();
+      } else {
+        setNotice(d.error || 'Failed to create list');
+      }
+    } catch (e: any) {
+      setNotice(`Error: ${e.message}`);
+    }
+    setCreatingList(false);
   };
 
   const deleteLeadList = async (id: number) => {
@@ -260,7 +277,7 @@ export default function LeadWorkspace() {
             <h2>Lead Lists</h2>
             <div style={{ display: 'flex', gap: 8 }}>
               <Link href="/scan" className="button primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }}>+ New Scan</Link>
-              <button className="secondary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={createLeadList}>+ New List</button>
+              <button className="secondary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreateList(true)}>+ New List</button>
             </div>
           </div>
           <div style={{ overflow: 'auto' }}>
@@ -302,6 +319,45 @@ export default function LeadWorkspace() {
           </div>
         </div>
         {notice && <div className="muted" style={{ marginTop: 8, textAlign: 'center' }}>{notice}</div>}
+
+        {/* Create Lead List Modal */}
+        {showCreateList && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => !creatingList && setShowCreateList(false)}>
+            <div className="card" style={{ width: '100%', maxWidth: 440, margin: 16 }} onClick={e => e.stopPropagation()}>
+              <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>New Lead List</h2>
+                <button onClick={() => !creatingList && setShowCreateList(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted)' }}>×</button>
+              </div>
+              <div style={{ display: 'grid', gap: 16 }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Name</label>
+                  <input
+                    value={newLeadListName}
+                    onChange={e => setNewLeadListName(e.target.value)}
+                    placeholder="e.g. T3 Labs Sales Leads"
+                    autoFocus
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Description (optional)</label>
+                  <input
+                    value={newLeadListDesc}
+                    onChange={e => setNewLeadListDesc(e.target.value)}
+                    placeholder="What this list is for"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="primary" disabled={creatingList || !newLeadListName.trim()} onClick={createLeadList}>
+                    {creatingList ? 'Creating…' : 'Create List'}
+                  </button>
+                  <button className="secondary" onClick={() => !creatingList && setShowCreateList(false)}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   }
