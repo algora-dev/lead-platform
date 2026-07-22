@@ -58,7 +58,7 @@ export default async function V2Dashboard() {
         <StatCard label="Companies" value={companies} href="/v2/companies" />
         <StatCard label="Assessments" value={assessments} />
         <StatCard label="Product Profiles" value={productProfiles} href="/v2/profiles?tab=product" />
-        <StatCard label="Customer Profiles" value={customerProfiles} href="/v2/profiles?tab=customer" />
+        <StatCard label="Lead Profiles" value={customerProfiles} href="/v2/profiles?tab=customer" />
         <StatCard label="Strategies" value={strategies} href="/v2/scans?tab=strategies" />
       </div>
 

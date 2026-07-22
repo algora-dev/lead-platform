@@ -136,10 +136,13 @@ export default function ScanWorkspace() {
           </div>
         )}
 
+        <div style={{ marginBottom: 16 }}>
+          <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreate(true)}>+ New Scan</button>
+        </div>
+
         <div className="card">
-          <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="card-head">
             <h2>Scans</h2>
-            <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreate(true)}>+ New Scan</button>
           </div>
           <table>
             <thead>

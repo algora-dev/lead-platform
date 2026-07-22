@@ -72,12 +72,15 @@ export default function StrategyWorkspace() {
       <>
         <div className="page-header">
           <h1>Discovery Strategies</h1>
-          <p>Compile product and customer profiles into a searchable discovery strategy.</p>
+          <p>Compile product and lead profiles into a searchable discovery strategy.</p>
         </div>
+        <div style={{ marginBottom: 16 }}>
+          <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreate(true)}>+ New Strategy</button>
+        </div>
+
         <div className="card">
-          <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="card-head">
             <h2>Strategies</h2>
-            <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreate(true)}>+ New Strategy</button>
           </div>
           <table>
             <thead>
@@ -316,8 +319,8 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
 
         {step === 2 && (
           <div style={{ padding: 16 }}>
-            <h3 style={{ marginBottom: 8 }}>Select Customer Profile Versions</h3>
-            <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>Choose which ideal customer profiles to include.</p>
+            <h3 style={{ marginBottom: 8 }}>Select Lead Profile Versions</h3>
+            <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>Choose which ideal lead profiles to include.</p>
             {customers.map(c => (
               <div key={c.id} style={{ marginBottom: 12, padding: 8, border: '1px solid #e5e7eb', borderRadius: 4 }}>
                 <strong>{c.name}</strong>
@@ -332,7 +335,7 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
                 </div>
               </div>
             ))}
-            {!customers.length && <div className="muted">No customer profiles found. <a href="/v2/profiles?tab=customer">Create one first</a>.</div>}
+            {!customers.length && <div className="muted">No lead profiles found. <a href="/v2/profiles?tab=customer">Create one first</a>.</div>}
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
               <button className="secondary" onClick={() => setStep(1)}>← Back</button>
               <button className="primary" disabled={!selectedCustomerVersions.length} onClick={() => setStep(3)}>Next →</button>
@@ -372,7 +375,7 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
               <strong style={{ fontSize: 13 }}>Summary:</strong>
               <ul style={{ fontSize: 12, marginLeft: 16, marginTop: 4 }}>
                 <li>Product versions: {selectedProductVersions.length}</li>
-                <li>Customer versions: {selectedCustomerVersions.length}</li>
+                <li>Lead versions: {selectedCustomerVersions.length}</li>
                 <li>Location: {country}{stateProvince ? `, ${stateProvince}` : ''}{city ? `, ${city}` : ''}{radiusKm ? ` (${radiusKm}km radius)` : ''}</li>
               </ul>
             </div>

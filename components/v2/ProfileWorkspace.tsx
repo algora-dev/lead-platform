@@ -60,10 +60,10 @@ const CUSTOMER_FIELDS: ProfileFieldDef[] = [
 export default function ProfileWorkspace({ type }: { type: 'product' | 'customer' }) {
   const apiBase = type === 'product' ? '/api/v2/product-profiles' : '/api/v2/customer-profiles';
   const fields = type === 'product' ? PRODUCT_FIELDS : CUSTOMER_FIELDS;
-  const title = type === 'product' ? 'Product Profiles' : 'Customer Profiles';
+  const title = type === 'product' ? 'Product Profiles' : 'Lead Profiles';
   const subtitle = type === 'product'
     ? 'Define what you sell — problems solved, outcomes, keywords, technologies.'
-    : 'Define your ideal customer — industries, locations, signals, decision makers.';
+    : 'Define your ideal lead — industries, locations, signals, decision makers.';
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selected, setSelected] = useState<Profile | null>(null);
@@ -217,10 +217,13 @@ export default function ProfileWorkspace({ type }: { type: 'product' | 'customer
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>
+        <div style={{ marginBottom: 16 }}>
+          <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreate(true)}>+ New Profile</button>
+        </div>
+
         <div className="card">
-          <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="card-head">
             <h2>{title}</h2>
-            <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreate(true)}>+ New Profile</button>
           </div>
           <table>
             <thead>
@@ -252,7 +255,7 @@ export default function ProfileWorkspace({ type }: { type: 'product' | 'customer
         </div>
         {notice && <div className="muted" style={{ marginTop: 8, textAlign: 'center' }}>{notice}</div>}
 
-        {showCreate && <CreateModal title={`New ${type === 'product' ? 'Product' : 'Customer'} Profile`} onCreate={createProfile} onClose={() => setShowCreate(false)} />}
+        {showCreate && <CreateModal title={`New ${type === 'product' ? 'Product' : 'Lead'} Profile`} type={type} onCreate={createProfile} onClose={() => setShowCreate(false)} />}
       </>
     );
   }
@@ -346,7 +349,7 @@ export default function ProfileWorkspace({ type }: { type: 'product' | 'customer
             {/* AI Structuring */}
             <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
               <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>AI Structuring (optional)</label>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Describe your {type === 'product' ? 'product/service' : 'ideal customer'} in plain text. AI will extract structured fields you can review and edit before saving.</p>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Describe your {type === 'product' ? 'product/service' : 'ideal lead'} in plain text. AI will extract structured fields you can review and edit before saving.</p>
               <textarea
                 value={aiInput}
                 onChange={e => setAiInput(e.target.value)}
@@ -398,10 +401,17 @@ export default function ProfileWorkspace({ type }: { type: 'product' | 'customer
   );
 }
 
-function CreateModal({ title, onCreate, onClose }: { title: string; onCreate: (name: string, desc: string, rawInput: string) => void; onClose: () => void }) {
+function CreateModal({ title, type, onCreate, onClose }: { title: string; type: 'product' | 'customer'; onCreate: (name: string, desc: string, rawInput: string) => void; onClose: () => void }) {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [rawInput, setRawInput] = useState('');
+
+  const isProduct = type === 'product';
+  const descLabel = isProduct ? 'Description of product' : 'Description of lead';
+  const detailLabel = isProduct ? 'Detailed Description' : 'Detailed Description';
+  const detailPlaceholder = isProduct
+    ? 'Describe what the product or service is in a sentence, include everything that the product is good at, what problems it solves'
+    : 'Describe your ideal lead/customer, what they do, the problems they encounter, their pain points, tasks they do, etc';
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={onClose}>
@@ -416,12 +426,12 @@ function CreateModal({ title, onCreate, onClose }: { title: string; onCreate: (n
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. QuoteCore+ Construction" autoFocus style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }} />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Description (optional)</label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>{descLabel}</label>
             <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Short summary" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }} />
           </div>
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Detailed Description (for AI structuring later)</label>
-            <textarea value={rawInput} onChange={e => setRawInput(e.target.value)} rows={4} placeholder="Describe in detail — AI will extract structured fields from this text" style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }} />
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500 }}>{detailLabel}</label>
+            <textarea value={rawInput} onChange={e => setRawInput(e.target.value)} rows={4} placeholder={detailPlaceholder} style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="primary" disabled={!name.trim()} onClick={() => onCreate(name.trim(), desc.trim(), rawInput.trim())}>Create</button>

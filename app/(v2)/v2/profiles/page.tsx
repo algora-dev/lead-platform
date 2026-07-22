@@ -27,7 +27,7 @@ export default function ProfilesPage() {
           className={`tab-btn${tab === 'customer' ? ' active' : ''}`}
           onClick={() => setTab('customer')}
         >
-          Customer Profiles
+          Lead Profiles
         </button>
       </div>
       <ProfileWorkspace type={tab === 'product' ? 'product' : 'customer'} key={tab} />

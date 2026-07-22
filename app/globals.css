@@ -239,7 +239,7 @@ img { display: block; max-width: 100%; }
 /* Layout */
 .shell {
   width: min(1180px, calc(100% - 40px));
-  margin: 14px auto 0;
+  margin: 28px auto 0;
   padding: 0 0 60px;
 }
 
