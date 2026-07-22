@@ -121,8 +121,8 @@ img { display: block; max-width: 100%; }
   align-items: center;
   gap: 6px;
   width: min(1180px, calc(100% - 40px));
-  margin: 12px auto 0;
-  padding: 0 4px;
+  margin: 14px auto 0;
+  padding: 0;
 }
 
 .nav-btn {
@@ -131,24 +131,23 @@ img { display: block; max-width: 100%; }
   padding: 9px 18px;
   font-size: 14px;
   font-weight: 600;
-  color: #424657;
-  border-radius: var(--radius);
+  color: #fff;
+  background: linear-gradient(135deg, #050608, #242832);
   border: 1px solid transparent;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(10, 11, 16, 0.10);
   transition: color 180ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .nav-btn:hover {
-  color: var(--ink);
-  background: var(--accent-soft);
   border-color: var(--accent-line);
-  box-shadow: 0 0 16px var(--accent-glow);
-  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(10, 11, 16, 0.10), 0 0 18px var(--accent-glow);
+  transform: scale(1.03);
 }
 
 .nav-btn.active {
-  color: var(--ink);
-  background: var(--accent-soft);
   border-color: var(--accent-line);
+  box-shadow: 0 4px 12px rgba(10, 11, 16, 0.10), 0 0 14px var(--accent-glow);
 }
 
 .nav-btn:focus-visible {
@@ -161,6 +160,7 @@ img { display: block; max-width: 100%; }
   display: flex;
   align-items: center;
   gap: 4px;
+  margin-top: 28px;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--line);
   padding-bottom: 0;
