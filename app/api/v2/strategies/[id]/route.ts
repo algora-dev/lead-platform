@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getTenantId } from '@/lib/auth';
+import { validateStrategy } from '@/lib/v2/strategy-validator';
 
 export async function GET(
   _req: NextRequest,
@@ -36,6 +37,40 @@ export async function PATCH(
     where: { id: parseInt(id), tenantId: getTenantId(session) },
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // If approving, validate the strategy is valid first
+  if (approved && !existing.approved) {
+    // Fetch linked profile versions to check readiness
+    const productVersions = await prisma.productProfileVersion.findMany({
+      where: { id: { in: existing.productProfileVersionIds } },
+      select: { id: true, approvedBy: true, approvedAt: true, rawInput: true },
+    });
+    const customerVersions = await prisma.customerProfileVersion.findMany({
+      where: { id: { in: existing.customerProfileVersionIds } },
+      select: { id: true, approvedBy: true, approvedAt: true, rawInput: true },
+    });
+
+    const validation = validateStrategy(
+      {
+        queries: existing.queries as any[],
+        keywords: existing.keywords,
+        country: existing.country,
+        stateProvince: existing.stateProvince,
+        city: existing.city,
+        productProfileVersionIds: existing.productProfileVersionIds,
+        customerProfileVersionIds: existing.customerProfileVersionIds,
+      },
+      productVersions,
+      customerVersions,
+    );
+
+    if (!validation.valid) {
+      return NextResponse.json({
+        error: 'Cannot approve strategy — validation failed',
+        validation,
+      }, { status: 422 });
+    }
+  }
 
   const updated = await prisma.discoveryStrategy.update({
     where: { id: parseInt(id) },

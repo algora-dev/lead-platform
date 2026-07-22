@@ -37,12 +37,18 @@ export async function POST(
     approvedBy,
   } = body;
 
+  // Determine status
+  const hasStructuredFields = problemsSolved.length > 0 || outcomes.length > 0 ||
+    industries.length > 0 || keywords.length > 0 || technologies.length > 0;
+  const status = approvedBy ? 'READY' : (hasStructuredFields ? 'NEEDS_STRUCTURING' : 'DRAFT');
+
   const nextVersion = (profile.versions[0]?.versionNumber || 0) + 1;
 
   const version = await prisma.productProfileVersion.create({
     data: {
       profileId,
       versionNumber: nextVersion,
+      status,
       problemsSolved,
       outcomes,
       industries,

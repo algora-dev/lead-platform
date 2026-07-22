@@ -40,12 +40,22 @@ export async function POST(
     approvedBy,
   } = body;
 
+  // Determine status:
+  // - If approvedBy is provided, status = READY (approved)
+  // - If structured fields are populated (from AI), status = NEEDS_STRUCTURING (awaiting review)
+  // - If only rawInput, status = DRAFT
+  const hasStructuredFields = industries.length > 0 || locations.length > 0 ||
+    hiringSignals.length > 0 || buyingSignals.length > 0 ||
+    operationalCharacteristics.length > 0 || technologies.length > 0;
+  const status = approvedBy ? 'READY' : (hasStructuredFields ? 'NEEDS_STRUCTURING' : 'DRAFT');
+
   const nextVersion = (profile.versions[0]?.versionNumber || 0) + 1;
 
   const version = await prisma.customerProfileVersion.create({
     data: {
       profileId,
       versionNumber: nextVersion,
+      status,
       industries,
       locations,
       employeeCountMin: employeeCountMin ?? null,

@@ -1,11 +1,16 @@
 /**
- * Strategy Compiler
- * Merges Product Profile versions and Customer Profile versions into a
- * compiled Discovery Strategy with search queries, keywords, filters,
- * evidence priorities, and scoring config.
+ * Strategy Compiler v2
  *
- * This is deterministic application code — no AI. AI may suggest profile
- * content, but strategy compilation is rule-based so it is reproducible.
+ * Phase 3 rewrite:
+ * - Geography uses city + state + country (not just country)
+ * - Separates Lead Profile (WHO to discover) from Product Profile (fit/scoring)
+ * - Generates provider-specific plans (Brave vs Apollo)
+ * - Removes naïve word-frequency fallback as primary mechanism
+ * - Adds compilerVersion for invalidation
+ * - Supports pagination and result budgets
+ *
+ * Lead Profile drives: industries, locations, buying/hiring signals, company size
+ * Product Profile drives: problems solved, outcomes, technologies, scoring keywords
  */
 
 export interface StrategyInput {
@@ -26,6 +31,20 @@ export interface GeographyInput {
   radiusKm?: number;
 }
 
+export interface BraveQuery {
+  query: string;
+  family: 'keyword' | 'hiring' | 'directory' | 'site' | 'quote_signal';
+  rationale: string;
+}
+
+export interface ApolloFilter {
+  keyword: string;
+  industry?: string[];
+  organizationLocations: string[];
+  employeeRange?: { min?: number; max?: number };
+  rationale: string;
+}
+
 export interface CompiledQuery {
   query: string;
   type: 'keyword' | 'hiring' | 'site' | 'combination';
@@ -33,7 +52,8 @@ export interface CompiledQuery {
 }
 
 export interface CompiledStrategy {
-  queries: CompiledQuery[];
+  compilerVersion: string;
+  queries: CompiledQuery[]; // Backward-compatible flat list
   keywords: string[];
   inclusionFilters: string[];
   exclusionFilters: string[];
@@ -41,6 +61,20 @@ export interface CompiledStrategy {
   enrichmentPriorities: string[];
   scoringConfig: Record<string, any>;
   defaultName: string;
+  // Provider-specific plans
+  bravePlan: {
+    queries: BraveQuery[];
+    maxResultsPerQuery: number;
+    maxPages: number;
+    estimatedRequests: number;
+  };
+  apolloPlan: {
+    filters: ApolloFilter[];
+    perPage: number;
+    maxPages: number;
+    estimatedRequests: number;
+  };
+  geographyString: string;
 }
 
 interface ProductVersionData {
@@ -82,229 +116,246 @@ function dedupe(arr: string[]): string[] {
   return [...new Set(arr.map(s => s.toLowerCase().trim()).filter(Boolean))];
 }
 
-// Stop words for raw text keyword extraction
-const STOP_WORDS = new Set([
-  'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
-  'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do',
-  'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this',
-  'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'what', 'which',
-  'who', 'when', 'where', 'why', 'how', 'all', 'each', 'every', 'some', 'any', 'few', 'more',
-  'most', 'other', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'up',
-  'down', 'out', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there',
-  'than', 'too', 'very', 'just', 'also', 'not', 'no', 'nor', 'only', 'own', 'same', 'so',
-  'if', 'about', 'against', 'between', 'as', 'until', 'while', 'because', 'our', 'their',
-  'its', 'his', 'her', 'my', 'your', 'them', 'him', 'us', 'me', 'product', 'service',
-  'company', 'business', 'help', 'like', 'need', 'want', 'use', 'using', 'used', 'get',
-  'make', 'makes', 'made', 'thing', 'things', 'etc', 'eg', 'ie', 'including', 'include',
-  'well', 'good', 'great', 'best', 'key', 'main', 'such', 'one', 'two', 'three',
-]);
-
 /**
- * Extract keywords from raw text when structured fields are empty.
- * Pulls significant words and bigrams from the detailed description.
+ * Build geography string from strategy geo input.
+ * Always includes city + state + country when available.
  */
-function extractKeywordsFromText(text: string, max: number = 20): string[] {
-  if (!text) return [];
-  const words = text.toLowerCase()
-    .replace(/[^\w\s]/g, ' ')
-    .split(/\s+/)
-    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
-
-  // Word frequency
-  const freq: Record<string, number> = {};
-  for (const w of words) {
-    freq[w] = (freq[w] || 0) + 1;
-  }
-
-  // Sort by frequency, then alphabetically
-  const sorted = Object.entries(freq)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([w]) => w);
-
-  // Also extract bigrams (two-word phrases) that appear at least once
-  const bigrams: string[] = [];
-  for (let i = 0; i < words.length - 1; i++) {
-    const bg = `${words[i]} ${words[i + 1]}`;
-    if (!STOP_WORDS.has(words[i]) && !STOP_WORDS.has(words[i + 1])) {
-      bigrams.push(bg);
-    }
-  }
-  const bigramFreq: Record<string, number> = {};
-  for (const bg of bigrams) {
-    bigramFreq[bg] = (bigramFreq[bg] || 0) + 1;
-  }
-  const sortedBigrams = Object.entries(bigramFreq)
-    .filter(([bg, count]) => count >= 1)
-    .sort((a, b) => b[1] - a[1])
-    .map(([bg]) => bg)
-    .slice(0, 8);
-
-  // Combine: bigrams first (more specific), then single words
-  return dedupe([...sortedBigrams, ...sorted].slice(0, max));
-}
-
-/**
- * Get raw input text from a version's rawInput field
- */
-function getRawText(version: { rawInput?: any }): string {
-  if (!version.rawInput) return '';
-  if (typeof version.rawInput === 'string') return version.rawInput;
-  if (version.rawInput.text) return version.rawInput.text;
-  return '';
-}
-
-function combineLocations(customer: CustomerVersionData[], country: string): string {
-  const locs = customer.flatMap(c => c.locations);
-  const parts = [country];
-  // Add first non-country location if present
-  const specific = locs.find(l => l.toLowerCase() !== country.toLowerCase());
-  if (specific) parts.push(specific);
+function buildGeographyString(geo: GeographyInput): string {
+  const parts: string[] = [];
+  if (geo.city) parts.push(geo.city);
+  if (geo.stateProvince) parts.push(geo.stateProvince);
+  if (geo.county && !geo.stateProvince) parts.push(geo.county);
+  if (geo.country) parts.push(geo.country);
   return parts.join(', ');
 }
+
+/**
+ * Build Apollo location filter.
+ * Apollo accepts city names, state names, and country names in organization_locations.
+ */
+function buildApolloLocations(geo: GeographyInput, customerLocations: string[]): string[] {
+  const locs: string[] = [];
+  // Always include the strategy geography first
+  if (geo.city) locs.push(geo.city);
+  if (geo.stateProvince) locs.push(geo.stateProvince);
+  if (geo.country) locs.push(geo.country);
+  // Add customer profile locations as additional targets
+  for (const loc of customerLocations) {
+    const lower = loc.toLowerCase();
+    if (!locs.some(l => l.toLowerCase() === lower)) {
+      locs.push(loc);
+    }
+  }
+  return locs;
+}
+
+export const COMPILER_VERSION = 'v2';
 
 export function compileStrategy(
   product: ProductVersionData[],
   customer: CustomerVersionData[],
   geo: GeographyInput
 ): CompiledStrategy {
-  // --- Merge keywords from all sources ---
-  const productKeywords = product.flatMap(p => [...p.keywords, ...p.technologies, ...p.problemsSolved]);
-  const customerKeywords = customer.flatMap(c => [...c.technologies, ...c.operationalCharacteristics, ...c.buyingSignals]);
-  let allKeywords = dedupe([...productKeywords, ...customerKeywords]);
+  const compilerVersion = 'v2';
+  const geoStr = buildGeographyString(geo);
 
-  // Fallback: if no structured keywords, extract from rawInput text
-  if (allKeywords.length === 0) {
-    const productText = product.map(p => getRawText(p)).join(' ');
-    const customerText = customer.map(c => getRawText(c)).join(' ');
-    const allText = [productText, customerText].join(' ');
-    allKeywords = extractKeywordsFromText(allText, 20);
-  }
+  // ==========================================
+  // LEAD PROFILE (Customer) — drives WHO to discover
+  // ==========================================
+  const leadIndustries = dedupe(customer.flatMap(c => c.industries));
+  const leadLocations = dedupe(customer.flatMap(c => c.locations));
+  const leadHiringSignals = dedupe(customer.flatMap(c => c.hiringSignals));
+  const leadBuyingSignals = dedupe(customer.flatMap(c => c.buyingSignals));
+  const leadOperationalChars = dedupe(customer.flatMap(c => c.operationalCharacteristics));
+  const leadTechnologies = dedupe(customer.flatMap(c => c.technologies));
+  const leadExclusions = dedupe(customer.flatMap(c => c.exclusions));
 
-  // --- Merge industries ---
-  let industries = dedupe([
-    ...product.flatMap(p => p.industries),
-    ...customer.flatMap(c => c.industries),
+  // Company size from customer profile
+  const employeeMin = Math.min(
+    ...customer.map(c => c.employeeCountMin).filter((v): v is number => v != null),
+    Infinity,
+  );
+  const employeeMax = Math.max(
+    ...customer.map(c => c.employeeCountMax).filter((v): v is number => v != null),
+    0,
+  );
+
+  // ==========================================
+  // PRODUCT PROFILE — drives fit/scoring
+  // ==========================================
+  const productKeywords = dedupe([
+    ...product.flatMap(p => p.keywords),
+    ...product.flatMap(p => p.technologies),
+    ...product.flatMap(p => p.problemsSolved),
   ]);
+  const productIndustries = dedupe(product.flatMap(p => p.industries));
+  const productExclusions = dedupe(product.flatMap(p => p.exclusions));
 
-  // Fallback: try to extract industry-like terms from raw text
-  if (industries.length === 0) {
-    const customerText = customer.map(c => getRawText(c)).join(' ');
-    // Look for common industry patterns in the text
-    const industryMatches = customerText.match(/\b(construction|building|contracting|engineering|manufacturing|logistics|transport|healthcare|finance|technology|software|retail|hospitality|agriculture|automotive|energy|real estate|legal|education|marketing|consulting)\b/gi);
-    if (industryMatches) {
-      industries = dedupe(industryMatches);
-    }
-  }
+  // Combined keywords for scoring/matching
+  const allKeywords = dedupe([...productKeywords, ...leadOperationalChars, ...leadBuyingSignals]);
 
-  // --- Merge exclusions ---
-  const exclusions = dedupe([
-    ...product.flatMap(p => p.exclusions),
-    ...customer.flatMap(c => c.exclusions),
-  ]);
+  // Combined industries
+  const allIndustries = dedupe([...leadIndustries, ...productIndustries]);
 
-  // --- Merge hiring signals ---
-  let hiringSignals = dedupe(customer.flatMap(c => c.hiringSignals));
+  // Combined exclusions
+  const allExclusions = dedupe([...leadExclusions, ...productExclusions]);
 
-  // Fallback: extract hiring signals from raw text
-  if (hiringSignals.length === 0) {
-    const customerText = customer.map(c => getRawText(c)).join(' ');
-    const hiringMatches = customerText.match(/\b(estimator|sales|lead gen|cold call|cold email|outreach|business development|account manager|salesperson|telesales|appointment setter|quoter|surveyor|project manager|estimating|bidding|tendering)\b/gi);
-    if (hiringMatches) {
-      hiringSignals = dedupe(hiringMatches);
-    }
-  }
+  // ==========================================
+  // BRAVE PLAN — search queries for web discovery
+  // ==========================================
+  const braveQueries: BraveQuery[] = [];
 
-  // --- Build search queries ---
-  const queries: CompiledQuery[] = [];
-  const locStr = combineLocations(customer, geo.country);
-
-  // Query type 1: Keyword + location queries
-  for (const kw of allKeywords.slice(0, 15)) {
-    queries.push({
-      query: `"${kw}" ${locStr}`,
-      type: 'keyword',
-      rationale: `Keyword "${kw}" from product/customer profiles, scoped to ${locStr}`,
+  // Family 1: Industry + location queries (highest priority)
+  for (const industry of leadIndustries.slice(0, 5)) {
+    braveQueries.push({
+      query: `"${industry}" ${geoStr}`,
+      family: 'keyword',
+      rationale: `Industry "${industry}" in ${geoStr}`,
     });
   }
 
-  // Query type 2: Hiring signal queries
-  for (const signal of hiringSignals.slice(0, 8)) {
-    queries.push({
-      query: `hiring "${signal}" ${locStr}`,
-      type: 'hiring',
-      rationale: `Hiring signal "${signal}" indicates active need, scoped to ${locStr}`,
+  // Family 2: Hiring signal queries
+  for (const signal of leadHiringSignals.slice(0, 6)) {
+    braveQueries.push({
+      query: `hiring "${signal}" ${geoStr}`,
+      family: 'hiring',
+      rationale: `Companies hiring for "${signal}" in ${geoStr} — indicates active operational need`,
     });
   }
 
-  // Query type 3: Industry + keyword combinations
-  for (const industry of industries.slice(0, 3)) {
-    const topKw = allKeywords.slice(0, 3);
-    queries.push({
-      query: `${industry} (${topKw.join(' OR ')}) ${locStr}`,
-      type: 'combination',
-      rationale: `Industry "${industry}" combined with top keywords, scoped to ${locStr}`,
-    });
-  }
-
-  // Query type 4: Site-specific queries for major job boards
-  const jobBoards = ['indeed.com', 'reed.co.uk', 'totaljobs.com'];
-  for (const board of jobBoards) {
-    const topKw = allKeywords[0];
-    if (topKw) {
-      queries.push({
-        query: `site:${board} "${topKw}" ${locStr}`,
-        type: 'site',
-        rationale: `Job board ${board} search for top keyword "${topKw}" in ${locStr}`,
+  // Family 3: Quote/estimate/bid signals (for construction/trades)
+  if (leadIndustries.length > 0 || leadBuyingSignals.length > 0) {
+    const quoteTerms = leadBuyingSignals.length > 0 ? leadBuyingSignals : ['quote', 'estimate', 'bid', 'tender'];
+    for (const term of quoteTerms.slice(0, 3)) {
+      const industry = leadIndustries[0] || 'contractor';
+      braveQueries.push({
+        query: `"${industry}" "${term}" ${geoStr}`,
+        family: 'quote_signal',
+        rationale: `"${industry}" companies with "${term}" signals in ${geoStr}`,
       });
     }
   }
 
-  // --- Inclusion filters (what candidates must have to be relevant) ---
-  const inclusionFilters: string[] = [];
-  if (industries.length) {
-    inclusionFilters.push(`Industry in: ${industries.join(', ')}`);
-  }
-  const sizeMin = Math.min(
-    ...product.map(p => p.companySizeMin).filter((v): v is number => v != null),
-    ...customer.map(c => c.employeeCountMin).filter((v): v is number => v != null),
-    Infinity,
-  );
-  const sizeMax = Math.max(
-    ...product.map(p => p.companySizeMax).filter((v): v is number => v != null),
-    ...customer.map(c => c.employeeCountMax).filter((v): v is number => v != null),
-    0,
-  );
-  if (sizeMin !== Infinity && sizeMin > 0) {
-    inclusionFilters.push(`Minimum employees: ${sizeMin}`);
-  }
-  if (sizeMax > 0) {
-    inclusionFilters.push(`Maximum employees: ${sizeMax}`);
-  }
-  const customerTech = dedupe(customer.flatMap(c => c.technologies));
-  if (customerTech.length) {
-    inclusionFilters.push(`Technologies: ${customerTech.join(', ')}`);
+  // Family 4: Directory queries (find business directories)
+  if (leadIndustries.length > 0) {
+    const industry = leadIndustries[0];
+    braveQueries.push({
+      query: `${industry} companies ${geoStr} directory`,
+      family: 'directory',
+      rationale: `Directory listing for ${industry} companies in ${geoStr}`,
+    });
   }
 
-  // --- Evidence priorities (what evidence is most valuable) ---
+  // Family 5: Site-specific job board queries
+  const jobBoards = ['indeed.com', 'reed.co.uk', 'totaljobs.com'];
+  for (const board of jobBoards.slice(0, 2)) {
+    const topSignal = leadHiringSignals[0] || leadIndustries[0];
+    if (topSignal) {
+      braveQueries.push({
+        query: `site:${board} "${topSignal}" ${geoStr}`,
+        family: 'site',
+        rationale: `Job board ${board} for "${topSignal}" in ${geoStr}`,
+      });
+    }
+  }
+
+  // Family 6: Product keyword + location (for fit scoring discovery)
+  for (const kw of productKeywords.slice(0, 3)) {
+    braveQueries.push({
+      query: `"${kw}" ${geoStr}`,
+      family: 'keyword',
+      rationale: `Product keyword "${kw}" in ${geoStr} — finds companies mentioning related needs`,
+    });
+  }
+
+  // ==========================================
+  // APOLLO PLAN — organization search filters
+  // ==========================================
+  const apolloFilters: ApolloFilter[] = [];
+  const apolloLocations = buildApolloLocations(geo, leadLocations);
+
+  // Filter 1: Industry keyword search
+  for (const industry of leadIndustries.slice(0, 3)) {
+    apolloFilters.push({
+      keyword: industry,
+      industry: leadIndustries.length > 0 ? leadIndustries : undefined,
+      organizationLocations: apolloLocations,
+      employeeRange: (employeeMin !== Infinity || employeeMax > 0) ? {
+        min: employeeMin !== Infinity ? employeeMin : undefined,
+        max: employeeMax > 0 ? employeeMax : undefined,
+      } : undefined,
+      rationale: `Apollo org search for "${industry}" in ${apolloLocations.join(', ')}`,
+    });
+  }
+
+  // Filter 2: Hiring signal keywords (Apollo can search by keywords in org descriptions)
+  for (const signal of leadHiringSignals.slice(0, 2)) {
+    apolloFilters.push({
+      keyword: signal,
+      organizationLocations: apolloLocations,
+      employeeRange: (employeeMin !== Infinity || employeeMax > 0) ? {
+        min: employeeMin !== Infinity ? employeeMin : undefined,
+        max: employeeMax > 0 ? employeeMax : undefined,
+      } : undefined,
+      rationale: `Apollo org search with keyword "${signal}" in ${apolloLocations.join(', ')}`,
+    });
+  }
+
+  // Filter 3: Operational characteristic
+  for (const op of leadOperationalChars.slice(0, 2)) {
+    apolloFilters.push({
+      keyword: op,
+      organizationLocations: apolloLocations,
+      rationale: `Apollo org search for operational characteristic "${op}" in ${apolloLocations.join(', ')}`,
+    });
+  }
+
+  // ==========================================
+  // BACKWARD-COMPATIBLE FLAT QUERIES
+  // ==========================================
+  const queries: CompiledQuery[] = braveQueries.map(bq => ({
+    query: bq.query,
+    type: bq.family === 'hiring' ? 'hiring' : bq.family === 'site' ? 'site' : bq.family === 'quote_signal' ? 'combination' : 'keyword',
+    rationale: bq.rationale,
+  }));
+
+  // ==========================================
+  // INCLUSION FILTERS
+  // ==========================================
+  const inclusionFilters: string[] = [];
+  if (allIndustries.length) {
+    inclusionFilters.push(`Industry in: ${allIndustries.join(', ')}`);
+  }
+  if (employeeMin !== Infinity && employeeMin > 0) {
+    inclusionFilters.push(`Minimum employees: ${employeeMin}`);
+  }
+  if (employeeMax > 0) {
+    inclusionFilters.push(`Maximum employees: ${employeeMax}`);
+  }
+  if (leadTechnologies.length) {
+    inclusionFilters.push(`Technologies: ${leadTechnologies.join(', ')}`);
+  }
+
+  // ==========================================
+  // EVIDENCE PRIORITIES
+  // ==========================================
   const evidencePriorities: string[] = [];
-  if (hiringSignals.length) {
-    evidencePriorities.push('job_advert');
-  }
+  if (leadHiringSignals.length) evidencePriorities.push('job_advert');
   evidencePriorities.push('company_website');
-  if (customerTech.length || product.flatMap(p => p.technologies).length) {
-    evidencePriorities.push('tech_stack');
-  }
+  if (leadTechnologies.length || productKeywords.length) evidencePriorities.push('tech_stack');
   evidencePriorities.push('contact_info');
-  if (customer.some(c => c.revenueMin || c.revenueMax)) {
-    evidencePriorities.push('funding_event');
-  }
+  if (customer.some(c => c.revenueMin || c.revenueMax)) evidencePriorities.push('funding_event');
   evidencePriorities.push('apollo_data');
 
-  // --- Enrichment priorities ---
+  // ==========================================
+  // ENRICHMENT PRIORITIES
+  // ==========================================
   const enrichmentPriorities: string[] = ['apollo', 'brave', 'openai'];
   if (process.env.APOLLO_API_KEY) enrichmentPriorities.unshift('apollo');
 
-  // --- Scoring config ---
+  // ==========================================
+  // SCORING CONFIG
+  // ==========================================
   const scoringConfig = {
     profileScore: {
       keywordMatch: { points: 5, max: 30 },
@@ -327,7 +378,9 @@ export function compileStrategy(
     combinedPolicyVersion: 'v1',
   };
 
-  // --- Default name ---
+  // ==========================================
+  // DEFAULT NAME
+  // ==========================================
   const productNames = product.map(p => p.profile?.name).filter(Boolean);
   const customerNames = customer.map(c => c.profile?.name).filter(Boolean);
   const defaultName = [
@@ -336,14 +389,36 @@ export function compileStrategy(
     customerNames[0] || 'Customer',
   ].join(' ');
 
+  // ==========================================
+  // RESULT BUDGETS
+  // ==========================================
+  const braveMaxPerQuery = 20;
+  const braveMaxPages = 1; // Brave API returns up to 20 per page
+  const apolloPerPage = 25;
+  const apolloMaxPages = 4; // Up to 100 results per filter
+
   return {
+    compilerVersion,
     queries,
     keywords: allKeywords,
     inclusionFilters,
-    exclusionFilters: exclusions,
+    exclusionFilters: allExclusions,
     evidencePriorities,
     enrichmentPriorities,
     scoringConfig,
     defaultName,
+    bravePlan: {
+      queries: braveQueries,
+      maxResultsPerQuery: braveMaxPerQuery,
+      maxPages: braveMaxPages,
+      estimatedRequests: braveQueries.length * braveMaxPages,
+    },
+    apolloPlan: {
+      filters: apolloFilters,
+      perPage: apolloPerPage,
+      maxPages: apolloMaxPages,
+      estimatedRequests: apolloFilters.length * apolloMaxPages,
+    },
+    geographyString: geoStr,
   };
 }

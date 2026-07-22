@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getTenantId } from '@/lib/auth';
-import { compileStrategy, type StrategyInput } from '@/lib/v2/strategy-compiler';
+import { compileStrategy, type StrategyInput, COMPILER_VERSION } from '@/lib/v2/strategy-compiler';
+import { validateStrategy } from '@/lib/v2/strategy-validator';
 
 export async function GET() {
   const session = await getSession();
@@ -79,6 +80,28 @@ export async function POST(req: NextRequest) {
     radiusKm,
   });
 
+  // Validate before saving
+  const validation = validateStrategy(
+    {
+      queries: compiled.queries,
+      keywords: compiled.keywords,
+      country,
+      stateProvince,
+      city,
+      productProfileVersionIds,
+      customerProfileVersionIds,
+    },
+    productVersions.map(v => ({ id: v.id, approvedBy: v.approvedBy, approvedAt: v.approvedAt, rawInput: v.rawInput })),
+    customerVersions.map(v => ({ id: v.id, approvedBy: v.approvedBy, approvedAt: v.approvedAt, rawInput: v.rawInput })),
+  );
+
+  if (!validation.valid) {
+    return NextResponse.json({
+      error: 'Strategy validation failed',
+      validation,
+    }, { status: 422 });
+  }
+
   const strategyName = name?.trim() || compiled.defaultName;
 
   const strategy = await prisma.discoveryStrategy.create({
@@ -98,9 +121,17 @@ export async function POST(req: NextRequest) {
       city: city?.trim() || null,
       radiusKm: radiusKm ?? null,
       scoringPolicyVersion: 'v1',
-      scoringConfig: compiled.scoringConfig,
+      scoringConfig: {
+        ...compiled.scoringConfig,
+        providerPlans: {
+          brave: compiled.bravePlan as any,
+          apollo: compiled.apolloPlan as any,
+        },
+        geographyString: compiled.geographyString,
+      } as any,
+      compilerVersion: COMPILER_VERSION,
     },
   });
 
-  return NextResponse.json(strategy, { status: 201 });
+  return NextResponse.json({ strategy, validation }, { status: 201 });
 }

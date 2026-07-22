@@ -86,8 +86,8 @@ describe('compileStrategy', () => {
 
   it('builds inclusion filters with industry and size', () => {
     expect(result.inclusionFilters.some(f => f.includes('construction'))).toBe(true);
-    expect(result.inclusionFilters.some(f => f.includes('Minimum employees: 5'))).toBe(true);
-    expect(result.inclusionFilters.some(f => f.includes('Maximum employees: 200'))).toBe(true);
+    expect(result.inclusionFilters.some(f => f.includes('Minimum employees: 10'))).toBe(true);
+    expect(result.inclusionFilters.some(f => f.includes('Maximum employees: 150'))).toBe(true);
   });
 
   it('prioritises evidence sources', () => {
@@ -122,5 +122,52 @@ describe('compileStrategy', () => {
     const siteQueries = result.queries.filter(q => q.type === 'site');
     expect(siteQueries.length).toBeGreaterThan(0);
     expect(siteQueries.some(q => q.query.includes('indeed.com'))).toBe(true);
+  });
+});
+
+describe('compileStrategy v2 — geography', () => {
+  const detroitGeo = {
+    productProfileVersionIds: [1],
+    customerProfileVersionIds: [1],
+    country: 'United States',
+    stateProvince: 'Michigan',
+    city: 'Detroit',
+  };
+
+  const detroitResult = compileStrategy(mockProducts, mockCustomers, detroitGeo);
+
+  it('includes city in geography string', () => {
+    expect(detroitResult.geographyString).toContain('Detroit');
+    expect(detroitResult.geographyString).toContain('Michigan');
+    expect(detroitResult.geographyString).toContain('United States');
+  });
+
+  it('includes city in Brave query strings', () => {
+    expect(detroitResult.bravePlan.queries.length).toBeGreaterThan(0);
+    expect(detroitResult.bravePlan.queries.some(q => q.query.includes('Detroit'))).toBe(true);
+  });
+
+  it('includes city in Apollo location filters', () => {
+    expect(detroitResult.apolloPlan.filters.length).toBeGreaterThan(0);
+    const allLocations = detroitResult.apolloPlan.filters.flatMap(f => f.organizationLocations);
+    expect(allLocations.some(l => l === 'Detroit')).toBe(true);
+  });
+
+  it('includes city in flat queries for backward compat', () => {
+    expect(detroitResult.queries.some(q => q.query.includes('Detroit'))).toBe(true);
+  });
+
+  it('sets compilerVersion to v2', () => {
+    expect(detroitResult.compilerVersion).toBe('v2');
+  });
+
+  it('generates Brave plan with estimated requests', () => {
+    expect(detroitResult.bravePlan.estimatedRequests).toBeGreaterThan(0);
+    expect(detroitResult.bravePlan.maxResultsPerQuery).toBeGreaterThan(0);
+  });
+
+  it('generates Apollo plan with estimated requests', () => {
+    expect(detroitResult.apolloPlan.estimatedRequests).toBeGreaterThan(0);
+    expect(detroitResult.apolloPlan.perPage).toBeGreaterThan(0);
   });
 });

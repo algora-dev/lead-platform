@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getTenantId } from '@/lib/auth';
 import { runner } from '@/lib/v2/job-runner';
+import { validateStrategy } from '@/lib/v2/strategy-validator';
 import '@/lib/v2/scan-handler'; // register handler
 
 export async function GET() {
@@ -12,7 +13,7 @@ export async function GET() {
     where: { tenantId: getTenantId(session) },
     orderBy: { createdAt: 'desc' },
     include: {
-      strategy: { select: { id: true, country: true, stateProvince: true } },
+      strategy: { select: { id: true, country: true, stateProvince: true, city: true, compilerVersion: true } },
       library: { select: { id: true, name: true } },
       _count: { select: { candidates: true } },
     },
@@ -43,6 +44,37 @@ export async function POST(req: NextRequest) {
   }
   if (!strategy.approved) {
     return NextResponse.json({ error: 'Strategy must be approved before running scans' }, { status: 400 });
+  }
+
+  // Re-validate strategy at scan time (catches stale strategies)
+  const productVersions = await prisma.productProfileVersion.findMany({
+    where: { id: { in: strategy.productProfileVersionIds } },
+    select: { id: true, approvedBy: true, approvedAt: true, rawInput: true },
+  });
+  const customerVersions = await prisma.customerProfileVersion.findMany({
+    where: { id: { in: strategy.customerProfileVersionIds } },
+    select: { id: true, approvedBy: true, approvedAt: true, rawInput: true },
+  });
+
+  const validation = validateStrategy(
+    {
+      queries: strategy.queries as any[],
+      keywords: strategy.keywords,
+      country: strategy.country,
+      stateProvince: strategy.stateProvince,
+      city: strategy.city,
+      productProfileVersionIds: strategy.productProfileVersionIds,
+      customerProfileVersionIds: strategy.customerProfileVersionIds,
+    },
+    productVersions,
+    customerVersions,
+  );
+
+  if (!validation.valid) {
+    return NextResponse.json({
+      error: 'Strategy is no longer valid — profile versions may have been changed. Create a new strategy.',
+      validation,
+    }, { status: 422 });
   }
 
   // Verify library if provided

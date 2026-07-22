@@ -4,12 +4,19 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 enum UserRole {
   ADMIN
   MEMBER
+}
+
+enum ProfileVersionStatus {
+  DRAFT
+  NEEDS_STRUCTURING
+  READY
 }
 
 model Tenant {
@@ -269,6 +276,7 @@ model ProductProfileVersion {
   profileId       Int
   profile         ProductProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   versionNumber   Int
+  status          ProfileVersionStatus @default(DRAFT)
   // Structured fields from AI or manual entry
   problemsSolved  String[]
   outcomes        String[]
@@ -309,6 +317,7 @@ model CustomerProfileVersion {
   profileId           Int
   profile             CustomerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   versionNumber       Int
+  status              ProfileVersionStatus @default(DRAFT)
   industries          String[]
   locations           String[]
   employeeCountMin    Int?
@@ -353,6 +362,8 @@ model DiscoveryStrategy {
   county          String?
   city            String?
   radiusKm        Int?
+  // Compiler version (for invalidation when compiler changes)
+  compilerVersion  String    @default("v1")
   // Scoring policy
   scoringPolicyVersion String
   scoringConfig   Json

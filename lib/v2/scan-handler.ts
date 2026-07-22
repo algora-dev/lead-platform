@@ -1,8 +1,12 @@
 /**
- * Discovery Scan Handler
- * Registered with the JobRunner. Executes discovery providers,
- * resolves company identities, calculates Profile Scores, and
- * persists ScanCandidates.
+ * Discovery Scan Handler v2
+ *
+ * Phase 1+4 fixes:
+ * - Tracks actual requests sent (not just query count)
+ * - Provider runs record actual attempts, response codes, errors
+ * - A provider with zero successful requests is FAILED, not COMPLETED
+ * - If all providers fail or zero requests succeed, scan is FAILED
+ * - Passes provider-specific plans (Apollo filters, Brave queries)
  */
 
 import { prisma } from '@/lib/prisma';
@@ -41,14 +45,46 @@ export const discoveryScanHandler: JobHandler = {
     const providers = getDiscoveryProviders({ brave: braveKey, apollo: apolloKey });
 
     if (!providers.length) {
+      await prisma.discoveryScan.update({
+        where: { id: scanId },
+        data: {
+          status: 'FAILED',
+          completedAt: new Date(),
+          errorMessage: 'No discovery providers available — check API keys',
+        },
+      });
       throw new Error('No discovery providers available — check API keys');
     }
 
-    // Parse queries from strategy (stored as JSON)
+    // Parse queries from strategy
     const queries = Array.isArray(strategy.queries) ? strategy.queries : JSON.parse(strategy.queries as string || '[]');
+
+    if (!queries.length) {
+      await prisma.discoveryScan.update({
+        where: { id: scanId },
+        data: {
+          status: 'FAILED',
+          completedAt: new Date(),
+          errorMessage: 'Strategy has zero queries — cannot perform discovery',
+        },
+      });
+      throw new Error('Strategy has zero queries — cannot perform discovery');
+    }
+
+    // Extract provider plans from scoringConfig (stored by compiler v2)
+    const scoringConfig = (strategy.scoringConfig as any) || {};
+    const providerPlans = scoringConfig.providerPlans || {};
+    const bravePlan = providerPlans.brave || null;
+    const apolloPlan = providerPlans.apollo || null;
+
+    // Use Brave plan queries if available (they have family metadata), else fall back to flat queries
+    const braveQueries = bravePlan?.queries || queries;
 
     const allCandidates: CandidateReference[] = [];
     let providerIndex = 0;
+    let totalSuccessfulRequests = 0;
+    let totalFailedProviders = 0;
+    const providerResults: { name: string; status: string; requests: number; results: number; error?: string }[] = [];
 
     for (const provider of providers) {
       providerIndex++;
@@ -59,7 +95,7 @@ export const discoveryScanHandler: JobHandler = {
         data: {
           scanId,
           provider: provider.name,
-          providerVersion: 'v1',
+          providerVersion: 'v2',
           role: 'discovery',
           status: 'RUNNING',
           startedAt: new Date(),
@@ -69,7 +105,7 @@ export const discoveryScanHandler: JobHandler = {
       try {
         updateProgress(progressBase, `Running ${provider.name} discovery...`);
 
-        const opts = {
+        const opts: any = {
           country: strategy.country,
           stateProvince: strategy.stateProvince || undefined,
           city: strategy.city || undefined,
@@ -77,7 +113,19 @@ export const discoveryScanHandler: JobHandler = {
           maxResults: 25,
         };
 
-        const candidates = await provider.discover(queries, opts);
+        // Pass provider-specific plans
+        if (provider.name === 'apollo' && apolloPlan) {
+          opts.apolloFilters = apolloPlan.filters || [];
+          opts.apolloPerPage = apolloPlan.perPage || 25;
+          opts.apolloMaxPages = apolloPlan.maxPages || 4;
+        }
+
+        const result = await provider.discover(braveQueries, opts);
+
+        const candidates = result.candidates;
+        const actualRequests = result.requestCount;
+        const responseCodes = result.responseCodes;
+        const errors = result.errors;
 
         // Deduplicate within this provider's results
         const seen = new Set<string>();
@@ -90,19 +138,46 @@ export const discoveryScanHandler: JobHandler = {
 
         allCandidates.push(...unique);
 
+        // Determine provider status
+        const hasErrors = errors.length > 0;
+        const hasSuccess = actualRequests > 0;
+        let providerStatus: string;
+
+        if (!hasSuccess && hasErrors) {
+          providerStatus = 'FAILED';
+          totalFailedProviders++;
+        } else if (hasSuccess && hasErrors) {
+          providerStatus = 'PARTIAL';
+        } else {
+          providerStatus = 'COMPLETED';
+        }
+
+        if (hasSuccess) totalSuccessfulRequests += actualRequests;
+
         await prisma.providerRun.update({
           where: { id: providerRun.id },
           data: {
-            status: 'COMPLETED',
+            status: providerStatus,
             completedAt: new Date(),
-            requestCount: queries.length,
+            attempts: actualRequests,
+            requestCount: actualRequests,
             resultCount: unique.length,
+            errorMessage: hasErrors ? errors.join('; ') : null,
           },
         });
 
-        updateProgress(progressBase + 25, `${provider.name}: ${unique.length} candidates found`);
+        providerResults.push({
+          name: provider.name,
+          status: providerStatus,
+          requests: actualRequests,
+          results: unique.length,
+          error: hasErrors ? errors.join('; ') : undefined,
+        });
+
+        updateProgress(progressBase + 25, `${provider.name}: ${unique.length} candidates (${actualRequests} requests, ${providerStatus})`);
 
       } catch (e: any) {
+        totalFailedProviders++;
         await prisma.providerRun.update({
           where: { id: providerRun.id },
           data: {
@@ -111,7 +186,33 @@ export const discoveryScanHandler: JobHandler = {
             errorMessage: e.message,
           },
         });
+
+        providerResults.push({
+          name: provider.name,
+          status: 'FAILED',
+          requests: 0,
+          results: 0,
+          error: e.message,
+        });
       }
+    }
+
+    // If all providers failed or zero requests succeeded, mark scan as FAILED
+    if (totalSuccessfulRequests === 0) {
+      const failureSummary = providerResults
+        .map(p => `${p.name}: ${p.status}${p.error ? ` (${p.error})` : ''}`)
+        .join('; ');
+
+      await prisma.discoveryScan.update({
+        where: { id: scanId },
+        data: {
+          status: 'FAILED',
+          completedAt: new Date(),
+          errorMessage: `All providers failed or made zero requests. ${failureSummary}`,
+        },
+      });
+
+      throw new Error(`Scan failed — all providers made zero successful requests. ${failureSummary}`);
     }
 
     // Deduplicate across providers
@@ -123,14 +224,12 @@ export const discoveryScanHandler: JobHandler = {
     for (const candidate of allCandidates) {
       const resolved = await resolveCompany(candidate, tenantId);
 
-      // Skip if already a candidate in this scan
       if (seenCompanies.has(resolved.companyId)) continue;
       seenCompanies.add(resolved.companyId);
       totalCount++;
 
       if (resolved.isNew) newCount++;
 
-      // Calculate Profile Score
       const strategyKeywords = {
         keywords: strategy.keywords || [],
         industries: extractFromStrategy(strategy, 'industries'),
@@ -156,10 +255,8 @@ export const discoveryScanHandler: JobHandler = {
         strategyKeywords
       );
 
-      // Skip excluded candidates
       if (scoreResult.excluded) continue;
 
-      // Create ScanCandidate
       await prisma.scanCandidate.create({
         data: {
           scanId,
@@ -170,11 +267,11 @@ export const discoveryScanHandler: JobHandler = {
           profileScore: scoreResult.score,
           profileScoreBreakdown: scoreResult.breakdown as any,
         },
-      }).catch(() => {}); // ignore duplicate (company already in scan)
+      }).catch(() => {});
     }
 
-    // Update scan with counts
     updateProgress(90, 'Finalizing...');
+
     await prisma.discoveryScan.update({
       where: { id: scanId },
       data: {
@@ -183,18 +280,19 @@ export const discoveryScanHandler: JobHandler = {
         candidateCount: totalCount,
         newCompanies: newCount,
         completedAt: new Date(),
+        errorMessage: totalFailedProviders > 0
+          ? `Completed with ${totalFailedProviders} failed provider(s): ${providerResults.filter(p => p.status === 'FAILED').map(p => p.name).join(', ')}`
+          : null,
       },
     });
 
     updateProgress(100, `Discovery complete: ${totalCount} candidates, ${newCount} new`);
 
-    return { candidateCount: totalCount, newCompanies: newCount };
+    return { candidateCount: totalCount, newCompanies: newCount, providerResults };
   },
 };
 
-// Helper to extract arrays from strategy JSON fields
 function extractFromStrategy(strategy: any, field: string): string[] {
-  // These come from the compiled strategy stored in inclusionFilters or keywords
   if (field === 'industries') {
     const filter = (strategy.inclusionFilters as string[])?.find(f => f.startsWith('Industry in:'));
     if (filter) return filter.replace('Industry in:', '').split(',').map(s => s.trim());
@@ -204,7 +302,6 @@ function extractFromStrategy(strategy: any, field: string): string[] {
     if (filter) return filter.replace('Technologies:', '').split(',').map(s => s.trim());
   }
   if (field === 'hiringSignals') {
-    // Hiring signals are encoded in queries of type 'hiring'
     const queries = Array.isArray(strategy.queries) ? strategy.queries : [];
     return queries
       .filter((q: any) => q.type === 'hiring')
@@ -218,5 +315,4 @@ function extractFromStrategy(strategy: any, field: string): string[] {
   return [];
 }
 
-// Register handler
 runner.register(discoveryScanHandler);
