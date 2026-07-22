@@ -268,8 +268,8 @@ function CreateScanModal({ strategies, onCreate, onClose }: {
   const [name, setName] = useState('');
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={onClose}>
-      <div className="card" style={{ width: '100%', maxWidth: 480, margin: 16 }} onClick={e => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div className="card" style={{ width: '100%', maxWidth: 480, margin: 16 }}>
         <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2>New Discovery Scan</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted)' }}>×</button>

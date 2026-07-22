@@ -56,6 +56,7 @@ interface ProductVersionData {
   pricingLevel: string | null;
   exclusions: string[];
   notes: string | null;
+  rawInput?: any;
 }
 
 interface CustomerVersionData {
@@ -74,10 +75,82 @@ interface CustomerVersionData {
   decisionMakers: string[];
   exclusions: string[];
   notes: string | null;
+  rawInput?: any;
 }
 
 function dedupe(arr: string[]): string[] {
   return [...new Set(arr.map(s => s.toLowerCase().trim()).filter(Boolean))];
+}
+
+// Stop words for raw text keyword extraction
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+  'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do',
+  'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this',
+  'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'what', 'which',
+  'who', 'when', 'where', 'why', 'how', 'all', 'each', 'every', 'some', 'any', 'few', 'more',
+  'most', 'other', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'up',
+  'down', 'out', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there',
+  'than', 'too', 'very', 'just', 'also', 'not', 'no', 'nor', 'only', 'own', 'same', 'so',
+  'if', 'about', 'against', 'between', 'as', 'until', 'while', 'because', 'our', 'their',
+  'its', 'his', 'her', 'my', 'your', 'them', 'him', 'us', 'me', 'product', 'service',
+  'company', 'business', 'help', 'like', 'need', 'want', 'use', 'using', 'used', 'get',
+  'make', 'makes', 'made', 'thing', 'things', 'etc', 'eg', 'ie', 'including', 'include',
+  'well', 'good', 'great', 'best', 'key', 'main', 'such', 'one', 'two', 'three',
+]);
+
+/**
+ * Extract keywords from raw text when structured fields are empty.
+ * Pulls significant words and bigrams from the detailed description.
+ */
+function extractKeywordsFromText(text: string, max: number = 20): string[] {
+  if (!text) return [];
+  const words = text.toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+
+  // Word frequency
+  const freq: Record<string, number> = {};
+  for (const w of words) {
+    freq[w] = (freq[w] || 0) + 1;
+  }
+
+  // Sort by frequency, then alphabetically
+  const sorted = Object.entries(freq)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([w]) => w);
+
+  // Also extract bigrams (two-word phrases) that appear at least once
+  const bigrams: string[] = [];
+  for (let i = 0; i < words.length - 1; i++) {
+    const bg = `${words[i]} ${words[i + 1]}`;
+    if (!STOP_WORDS.has(words[i]) && !STOP_WORDS.has(words[i + 1])) {
+      bigrams.push(bg);
+    }
+  }
+  const bigramFreq: Record<string, number> = {};
+  for (const bg of bigrams) {
+    bigramFreq[bg] = (bigramFreq[bg] || 0) + 1;
+  }
+  const sortedBigrams = Object.entries(bigramFreq)
+    .filter(([bg, count]) => count >= 1)
+    .sort((a, b) => b[1] - a[1])
+    .map(([bg]) => bg)
+    .slice(0, 8);
+
+  // Combine: bigrams first (more specific), then single words
+  return dedupe([...sortedBigrams, ...sorted].slice(0, max));
+}
+
+/**
+ * Get raw input text from a version's rawInput field
+ */
+function getRawText(version: { rawInput?: any }): string {
+  if (!version.rawInput) return '';
+  if (typeof version.rawInput === 'string') return version.rawInput;
+  if (version.rawInput.text) return version.rawInput.text;
+  return '';
 }
 
 function combineLocations(customer: CustomerVersionData[], country: string): string {
@@ -97,13 +170,31 @@ export function compileStrategy(
   // --- Merge keywords from all sources ---
   const productKeywords = product.flatMap(p => [...p.keywords, ...p.technologies, ...p.problemsSolved]);
   const customerKeywords = customer.flatMap(c => [...c.technologies, ...c.operationalCharacteristics, ...c.buyingSignals]);
-  const allKeywords = dedupe([...productKeywords, ...customerKeywords]);
+  let allKeywords = dedupe([...productKeywords, ...customerKeywords]);
+
+  // Fallback: if no structured keywords, extract from rawInput text
+  if (allKeywords.length === 0) {
+    const productText = product.map(p => getRawText(p)).join(' ');
+    const customerText = customer.map(c => getRawText(c)).join(' ');
+    const allText = [productText, customerText].join(' ');
+    allKeywords = extractKeywordsFromText(allText, 20);
+  }
 
   // --- Merge industries ---
-  const industries = dedupe([
+  let industries = dedupe([
     ...product.flatMap(p => p.industries),
     ...customer.flatMap(c => c.industries),
   ]);
+
+  // Fallback: try to extract industry-like terms from raw text
+  if (industries.length === 0) {
+    const customerText = customer.map(c => getRawText(c)).join(' ');
+    // Look for common industry patterns in the text
+    const industryMatches = customerText.match(/\b(construction|building|contracting|engineering|manufacturing|logistics|transport|healthcare|finance|technology|software|retail|hospitality|agriculture|automotive|energy|real estate|legal|education|marketing|consulting)\b/gi);
+    if (industryMatches) {
+      industries = dedupe(industryMatches);
+    }
+  }
 
   // --- Merge exclusions ---
   const exclusions = dedupe([
@@ -112,7 +203,16 @@ export function compileStrategy(
   ]);
 
   // --- Merge hiring signals ---
-  const hiringSignals = dedupe(customer.flatMap(c => c.hiringSignals));
+  let hiringSignals = dedupe(customer.flatMap(c => c.hiringSignals));
+
+  // Fallback: extract hiring signals from raw text
+  if (hiringSignals.length === 0) {
+    const customerText = customer.map(c => getRawText(c)).join(' ');
+    const hiringMatches = customerText.match(/\b(estimator|sales|lead gen|cold call|cold email|outreach|business development|account manager|salesperson|telesales|appointment setter|quoter|surveyor|project manager|estimating|bidding|tendering)\b/gi);
+    if (hiringMatches) {
+      hiringSignals = dedupe(hiringMatches);
+    }
+  }
 
   // --- Build search queries ---
   const queries: CompiledQuery[] = [];
