@@ -281,6 +281,13 @@ export default function ProfileWorkspace({ type }: { type: 'product' | 'customer
 
         {latest && (
           <div style={{ display: 'grid', gap: 12, padding: 16 }}>
+            {/* Show raw input text (detailed description) if present */}
+            {latest.rawInput?.text && (
+              <div style={{ padding: 12, background: 'var(--soft)', borderRadius: 8, border: '1px solid var(--line)' }}>
+                <strong style={{ fontSize: 13, display: 'block', marginBottom: 4 }}>Detailed Description</strong>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: '#424657', whiteSpace: 'pre-wrap' }}>{latest.rawInput.text}</p>
+              </div>
+            )}
             {fields.map(f => {
               const val = latest[f.key];
               if (f.type === 'taglist') {
