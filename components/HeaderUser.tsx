@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 type User = {
   id: number;
@@ -26,8 +27,10 @@ export default function HeaderUser({ user }: { user: User }) {
 
   return (
     <div className="header-user">
-      <span className="header-user-avatar">{initials}</span>
-      <span className="header-user-name">{displayName}</span>
+      <Link href="/v2/account" className="header-user-link">
+        <span className="header-user-avatar">{initials}</span>
+        <span className="header-user-name">{displayName}</span>
+      </Link>
       <button
         onClick={logout}
         disabled={loggingOut}

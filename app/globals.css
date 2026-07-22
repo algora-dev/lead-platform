@@ -70,6 +70,22 @@ img { display: block; max-width: 100%; }
   gap: 10px;
 }
 
+.header-user-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+  border-radius: var(--radius);
+  padding: 4px 6px;
+  transition: background 180ms ease, box-shadow 180ms ease;
+}
+
+.header-user-link:hover {
+  background: var(--accent-soft);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
 .header-user-avatar {
   display: inline-flex;
   width: 30px;
@@ -120,9 +136,14 @@ img { display: block; max-width: 100%; }
   display: flex;
   align-items: center;
   gap: 6px;
-  width: min(1180px, calc(100% - 40px));
-  margin: 14px auto 0;
+  width: 100%;
+  margin: 0;
   padding: 0;
+}
+
+/* When nav is followed by content, add breathing room */
+.primary-nav + * {
+  margin-top: 24px;
 }
 
 .nav-btn {
@@ -218,8 +239,8 @@ img { display: block; max-width: 100%; }
 /* Layout */
 .shell {
   width: min(1180px, calc(100% - 40px));
-  margin: 0 auto;
-  padding: 32px 0 60px;
+  margin: 14px auto 0;
+  padding: 0 0 60px;
 }
 
 /* Cards */

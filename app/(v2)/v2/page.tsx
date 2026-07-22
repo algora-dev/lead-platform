@@ -49,7 +49,7 @@ export default async function V2Dashboard() {
 
   return (
     <div className="page-header">
-      <h1>V2 Dashboard</h1>
+      <h1>Dashboard</h1>
       <p>Evidence-Based Opportunity Discovery Platform</p>
 
       {/* Stats Grid */}
