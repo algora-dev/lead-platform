@@ -1,0 +1,34 @@
+{
+  "queries": ["construction company hiring site:uk", "plumber quoting services London"],
+  "response": {
+    "web": {
+      "results": [
+        {
+          "title": "ABC Construction Ltd | Building Services London",
+          "url": "https://www.abcconstruction.co.uk",
+          "description": "ABC Construction Ltd is a leading construction company in London offering building services, renovations, and commercial construction. Get a free quote today.",
+          "age": "2 days ago"
+        },
+        {
+          "title": "Smith Plumbing & Heating - Quote Services",
+          "url": "https://www.smithplumbing.com/services",
+          "description": "Professional plumbing and heating services across London. We provide free quotes for all plumbing work including boiler installation and bathroom fitting.",
+          "age": "5 days ago"
+        },
+        {
+          "title": "Indeed - Construction Jobs in London",
+          "url": "https://www.indeed.co.uk/jobs?q=construction&l=London",
+          "description": "Construction jobs in London. Apply to various construction roles including site manager, project manager, and labourer positions.",
+          "age": "1 day ago"
+        }
+      ]
+    }
+  },
+  "expectedCandidates": 3,
+  "expectedProviders": ["brave"],
+  "expectedFirstCandidate": {
+    "name": "ABC Construction Ltd",
+    "domain": "abcconstruction.co.uk",
+    "sourceProvider": "brave"
+  }
+}

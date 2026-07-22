@@ -1,0 +1,31 @@
+{
+  "company": {
+    "id": 1,
+    "name": "BuildRight Construction",
+    "website": "https://www.buildright.co.uk",
+    "domain": "buildright.co.uk",
+    "country": "United Kingdom",
+    "location": "London",
+    "industry": "Construction"
+  },
+  "response": {
+    "organization": {
+      "id": "org_001",
+      "name": "BuildRight Construction",
+      "website_url": "https://www.buildright.co.uk",
+      "industry": "Construction",
+      "estimated_num_employees": "50-100",
+      "employee_count": 75,
+      "headquarters_location": "London, England",
+      "linkedin_url": "https://www.linkedin.com/company/buildright",
+      "founded_year": 2015
+    }
+  },
+  "expectedEvidenceType": "APOLLO_DATA",
+  "expectedClaims": [
+    { "type": "INDUSTRY", "value": "Construction" },
+    { "type": "EMPLOYEE_COUNT", "value": "50-100" },
+    { "type": "LOCATION", "value": "London, England" }
+  ],
+  "expectedReliability": 80
+}

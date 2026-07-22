@@ -1,0 +1,20 @@
+{
+  "company": {
+    "id": 2,
+    "name": "ABC Construction Ltd",
+    "website": "https://www.abcconstruction.co.uk",
+    "domain": "abcconstruction.co.uk",
+    "country": "United Kingdom",
+    "location": "London",
+    "industry": null
+  },
+  "htmlResponse": "<!DOCTYPE html><html><head><title>ABC Construction Ltd | Building Services London</title><meta name=\"description\" content=\"ABC Construction Ltd - leading London builders offering construction, renovation, and commercial building services.\"></head><body><div><h1>Welcome to ABC Construction Ltd</h1><p>Contact us at info@abcconstruction.co.uk or call 020 1234 5678.</p><p>We use WordPress powered site. Get a free quote for your building project.</p><script src=\"/wp-content/themes/main/script.js\"></script><p>Our services include commercial construction, residential renovations, and project management.</p><p>Check our case studies and portfolio of completed projects.</p></div></body></html>",
+  "expectedEvidenceType": "COMPANY_WEBSITE",
+  "expectedClaims": {
+    "emails": ["info@abcconstruction.co.uk"],
+    "phones": ["020 1234 5678"],
+    "technologies": ["WordPress"],
+    "operationalSignals": ["offers quoting", "contactable", "services listed", "case studies/portfolio"]
+  },
+  "expectedReliability": 75
+}

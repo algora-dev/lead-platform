@@ -1,0 +1,41 @@
+{
+  "searchTask": {
+    "keyword": "construction quoting software",
+    "locations": ["London"],
+    "employeeRange": { "min": 10, "max": 200 }
+  },
+  "response": {
+    "organizations": [
+      {
+        "id": "org_001",
+        "name": "BuildRight Construction",
+        "website_url": "https://www.buildright.co.uk",
+        "industry": "Construction",
+        "estimated_num_employees": "50-100",
+        "employee_count": 75,
+        "headquarters_location": "London, England",
+        "linkedin_url": "https://www.linkedin.com/company/buildright",
+        "founded_year": 2015
+      },
+      {
+        "id": "org_002",
+        "name": "QuotekPro Solutions",
+        "website_url": "https://www.quotekpro.com",
+        "industry": "Software Development",
+        "estimated_num_employees": "11-50",
+        "employee_count": 30,
+        "headquarters_location": "Manchester, England",
+        "linkedin_url": "https://www.linkedin.com/company/quotekpro",
+        "founded_year": 2019
+      }
+    ]
+  },
+  "expectedCandidates": 2,
+  "expectedFirstCandidate": {
+    "name": "BuildRight Construction",
+    "domain": "buildright.co.uk",
+    "industry": "Construction",
+    "employeeCount": 75,
+    "sourceProvider": "apollo"
+  }
+}

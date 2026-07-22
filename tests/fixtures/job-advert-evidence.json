@@ -1,0 +1,38 @@
+{
+  "company": {
+    "id": 3,
+    "name": "BuildRight Construction",
+    "website": "https://www.buildright.co.uk",
+    "domain": "buildright.co.uk",
+    "country": "United Kingdom",
+    "location": "London",
+    "industry": "Construction"
+  },
+  "response": {
+    "web": {
+      "results": [
+        {
+          "title": "BuildRight Construction - Careers - We're Hiring Site Managers",
+          "url": "https://www.buildright.co.uk/careers",
+          "description": "BuildRight Construction is hiring site managers, project engineers, and quantity surveyors. Join our growing team in London."
+        },
+        {
+          "title": "BuildRight Construction Jobs - Indeed",
+          "url": "https://www.indeed.co.uk/cmp/BuildRight-Construction",
+          "description": "See jobs at BuildRight Construction on Indeed. Site manager, project manager, and labourer positions available."
+        }
+      ]
+    }
+  },
+  "expectedEvidenceCount": 2,
+  "expectedFirstEvidence": {
+    "evidenceType": "JOB_ADVERT",
+    "isJobBoard": false,
+    "reliability": 85
+  },
+  "expectedSecondEvidence": {
+    "evidenceType": "JOB_ADVERT",
+    "isJobBoard": true,
+    "reliability": 70
+  }
+}

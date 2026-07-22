@@ -118,7 +118,7 @@ async function fetchWithRetry(
 const DIRECTORY_DOMAINS = new Set([
   'yelp.com', 'yellowpages.com', 'yell.com', 'trustpilot.com', 'google.com/maps',
   'bing.com', 'facebook.com', 'linkedin.com', 'glassdoor.com', 'indeed.com',
-  'reed.co.uk', 'totaljobs.com', 'cv-library.co.uk', 'glassdoor.co.uk',
+  'indeed.co.uk', 'reed.co.uk', 'totaljobs.com', 'cv-library.co.uk', 'glassdoor.co.uk',
 ]);
 
 // --- Brave Search Provider ---

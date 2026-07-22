@@ -440,7 +440,7 @@ export const jobAdvertProvider: EvidenceProvider = {
         if (!titleLower.includes(companyNameLower) && !descLower.includes(companyNameLower)) continue;
 
         // Determine job board vs company careers page
-        const jobBoards = ['indeed.com', 'linkedin.com', 'glassdoor.com', 'reed.co.uk', 'totaljobs.com', 'seek.co.nz', 'trade.me'];
+        const jobBoards = ['indeed.com', 'indeed.co.uk', 'linkedin.com', 'glassdoor.com', 'reed.co.uk', 'totaljobs.com', 'seek.co.nz', 'trade.me'];
         const isJobBoard = jobBoards.some(b => domain?.includes(b));
         const reliability = isJobBoard ? 70 : 85; // Company careers page is more reliable
 
