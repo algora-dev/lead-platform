@@ -148,7 +148,7 @@ export const websiteProvider: EvidenceProvider = {
 
       if (emailSet.size > 0) {
         claims.push({
-          claimType: 'CONTACT_INFO',
+          claimType: 'CONTACT_ROLE',
           claimValue: [...emailSet].slice(0, 5).join(', '),
           claimData: { emails: [...emailSet].slice(0, 5), type: 'email' },
           supports: true,
@@ -157,7 +157,7 @@ export const websiteProvider: EvidenceProvider = {
 
       if (phoneSet.size > 0) {
         claims.push({
-          claimType: 'CONTACT_INFO',
+          claimType: 'CONTACT_ROLE',
           claimValue: [...phoneSet].slice(0, 3).join(', '),
           claimData: { phones: [...phoneSet].slice(0, 3), type: 'phone' },
           supports: true,
@@ -336,7 +336,7 @@ export const apolloEvidenceProvider: EvidenceProvider = {
         try { domain = new URL(org.website_url).hostname.replace(/^www\./, ''); } catch {}
         if (domain && domain !== company.domain) {
           claims.push({
-            claimType: 'CONTACT_INFO',
+            claimType: 'CONTACT_ROLE',
             claimValue: org.website_url,
             claimData: { type: 'website', domain, source: 'apollo' },
             supports: true,
@@ -346,7 +346,7 @@ export const apolloEvidenceProvider: EvidenceProvider = {
 
       if (org.linkedin_url) {
         claims.push({
-          claimType: 'CONTACT_INFO',
+          claimType: 'CONTACT_ROLE',
           claimValue: org.linkedin_url,
           claimData: { type: 'linkedin', source: 'apollo' },
           supports: true,
@@ -515,3 +515,4 @@ export function getEvidenceProviders(apiKeys: {
 
   return providers;
 }
+

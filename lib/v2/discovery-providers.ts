@@ -114,12 +114,49 @@ async function fetchWithRetry(
   throw lastError || new Error('Retry loop exhausted');
 }
 
-// --- Known directory/job board domains (for classification, not exclusion) ---
+// --- Known directory/job board domains (filtered out of candidates) ---
 const DIRECTORY_DOMAINS = new Set([
-  'yelp.com', 'yellowpages.com', 'yell.com', 'trustpilot.com', 'google.com/maps',
-  'bing.com', 'facebook.com', 'linkedin.com', 'glassdoor.com', 'indeed.com',
-  'indeed.co.uk', 'reed.co.uk', 'totaljobs.com', 'cv-library.co.uk', 'glassdoor.co.uk',
+  // General directories
+  'yelp.com', 'yellowpages.com', 'yell.com', 'trustpilot.com', 'bbb.org',
+  'google.com', 'google.co.uk', 'bing.com', 'facebook.com', 'instagram.com',
+  'twitter.com', 'x.com', 'tiktok.com', 'youtube.com', 'pinterest.com',
+  'reddit.com', 'wikipedia.org', 'wikidata.org',
+  // Job boards
+  'indeed.com', 'indeed.co.uk', 'glassdoor.com', 'glassdoor.co.uk',
+  'reed.co.uk', 'totaljobs.com', 'cv-library.co.uk', 'monster.com', 'monster.co.uk',
+  'ziprecruiter.com', 'simplyhired.com', 'careerbuilder.com',
+  'linkedin.com', 'linkedin.co.uk',
+  // Industry directories / aggregators
+  'gaf.com', 'houzz.com', 'angi.com', 'angieslist.com', 'homeadvisor.com',
+  'thumbtack.com', 'porch.com', 'craftjack.com', 'networx.com',
+  'roofingquotes.com', 'quotesnare.com', 'quotewizard.com',
+  'contractors.com', 'buildzoom.com', 'construction.com',
+  'homeguide.com', 'homewyse.com', 'fixr.com',
+  // Job boards (additional)
+  'dice.com', 'joblist.com', 'ziprecruiter.com', 'simplyhired.com',
+  'careerbuilder.com', 'jooble.org', 'neuvoo.com', 'talent.com',
+  // Review sites
+  'reviews.io', 'sitejabber.com', 'consumeraffairs.com',
+  // Maps
+  'maps.google.com', 'maps.app.goo.gl',
+  // App stores
+  'apps.apple.com', 'play.google.com',
 ]);
+
+/**
+ * Check if a domain is a directory/aggregator (not an actual company website).
+ * Also matches subdomains (e.g. business.facebook.com).
+ */
+function isDirectoryDomain(domain: string | null): boolean {
+  if (!domain) return false;
+  // Check exact match
+  if (DIRECTORY_DOMAINS.has(domain)) return true;
+  // Check if any directory domain is a suffix (e.g. m.facebook.com)
+  for (const dir of DIRECTORY_DOMAINS) {
+    if (domain.endsWith('.' + dir)) return true;
+  }
+  return false;
+}
 
 // --- Brave Search Provider ---
 
@@ -178,11 +215,16 @@ export const braveProvider: DiscoveryProvider = {
           let domain: string | null = null;
           try { domain = new URL(url).hostname.replace(/^www\./, ''); } catch {}
 
-          // Extract company name from page title or domain
-          const name = r.title?.split(/\s*[|\-–—]\s*/)[0]?.trim() || domain || url;
+          // Skip directory listings, job boards, and aggregators
+          if (isDirectoryDomain(domain)) continue;
 
-          // Classify if this is a directory listing rather than a company website
-          const isDirectory = domain ? DIRECTORY_DOMAINS.has(domain) : false;
+          // Extract company name from page title
+          // Split on common separators, take first part, clean up
+          let name = r.title || domain || url;
+          name = name.split(/\s*[|\-\u2013\u2014:]\s*/)[0].trim();
+          // Remove location suffixes like "in Detroit", "near Detroit, MI"
+          name = name.replace(/\s+(in|near|serving)\s+.+$/i, '').trim();
+          if (name.length < 3) name = r.title || domain || url;
 
           candidates.push({
             name,
@@ -195,7 +237,7 @@ export const braveProvider: DiscoveryProvider = {
               title: r.title,
               description: r.description,
               url,
-              isDirectory,
+              isDirectory: false,
             },
           });
         }

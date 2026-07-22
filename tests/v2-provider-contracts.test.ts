@@ -109,8 +109,8 @@ describe('Provider Contract Tests', () => {
         },
       );
 
-      // 3 results per query × 2 queries = 6 total candidates
-      expect(result.candidates).toHaveLength(braveDiscoveryFixture.expectedCandidates * braveDiscoveryFixture.queries.length);
+      // 2 results per query × 2 queries = 4 total (indeed.co.uk filtered as directory)
+      expect(result.candidates).toHaveLength(4);
       expect(result.requestCount).toBe(2); // 2 queries
 
       const first = result.candidates[0];
@@ -194,13 +194,11 @@ describe('Provider Contract Tests', () => {
         { country: 'United Kingdom', apiKey: 'test-key' },
       );
 
-      // Indeed result should be classified as directory
+      // Indeed result should be filtered OUT (directory)
       const indeedResult = result.candidates.find(c => c.domain === 'indeed.co.uk');
-      expect(indeedResult).toBeDefined();
-      expect(indeedResult!.rawPayload.isDirectory).toBe(true);
-      // The fixture includes indeed.co.uk in the DIRECTORY_DOMAINS set
+      expect(indeedResult).toBeUndefined();
 
-      // ABC Construction should NOT be a directory
+      // ABC Construction should be present (not a directory)
       const abcResult = result.candidates.find(c => c.domain === 'abcconstruction.co.uk');
       expect(abcResult).toBeDefined();
       expect(abcResult!.rawPayload.isDirectory).toBe(false);
@@ -378,7 +376,7 @@ describe('Provider Contract Tests', () => {
       expect(item.reliability).toBe(websiteEvidenceFixture.expectedReliability);
 
       // Check extracted claims
-      const contactClaims = item.claims.filter(c => c.claimType === 'CONTACT_INFO');
+      const contactClaims = item.claims.filter(c => c.claimType === 'CONTACT_ROLE');
       const emails = contactClaims.find(c => c.claimData?.type === 'email');
       expect(emails?.claimData.emails).toEqual(websiteEvidenceFixture.expectedClaims.emails);
 
@@ -573,4 +571,5 @@ describe('Provider Contract Tests', () => {
     });
   });
 });
+
 

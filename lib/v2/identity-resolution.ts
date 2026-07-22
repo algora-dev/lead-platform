@@ -92,12 +92,19 @@ export async function resolveCompany(
   }
 
   // 4. Create new company
+  // Extract domain from website if not already provided
+  let domain = candidate.domain;
+  if (!domain && candidate.website) {
+    try { domain = new URL(candidate.website).hostname.replace(/^www\./, ''); } catch {}
+  }
+
   const company = await prisma.company.create({
     data: {
       name: candidate.name,
       normalizedName,
       country: country || 'Unknown',
       website: candidate.website || null,
+      domain: domain || null,
       tenantId,
     },
   });
