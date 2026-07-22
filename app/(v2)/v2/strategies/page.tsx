@@ -1,7 +1,7 @@
-import StrategyWorkspace from '@/components/v2/StrategyWorkspace';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-export default function Page() {
-  return <StrategyWorkspace />;
+export default function StrategiesRedirect() {
+  redirect('/v2/scans?tab=strategies');
 }

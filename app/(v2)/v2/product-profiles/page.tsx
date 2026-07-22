@@ -1,7 +1,7 @@
-import ProfileWorkspace from '@/components/v2/ProfileWorkspace';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
-export default function Page() {
-  return <ProfileWorkspace type="product" />;
+export default function ProductProfilesRedirect() {
+  redirect('/v2/profiles?tab=product');
 }

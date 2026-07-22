@@ -17,7 +17,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const headerList = await headers();
   const pathname = headerList.get('x-pathname') || '';
   const isLoginPage = pathname === '/login';
-  const isV2 = pathname.startsWith('/v2');
 
   return (
     <html lang="en">
@@ -37,16 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <img src="/t3labs-logo.png" alt={`${b.businessName} logo`} className="brand-logo" />
                 <span className="brand-name">{b.productName}</span>
               </Link>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <nav className="site-nav">
-                  <Link href="/v2/product-profiles">Product Profiles</Link>
-                  <Link href="/v2/customer-profiles">Customer Profiles</Link>
-                  <Link href="/v2/scans">Scans</Link>
-                  <Link href="/v2/libraries">Libraries</Link>
-                  <Link href="/v2/companies">Companies</Link>
-                </nav>
-                {user && <HeaderUser user={user} />}
-              </div>
+              {user && <HeaderUser user={user} />}
             </header>
             <div className="shell">{children}</div>
           </>

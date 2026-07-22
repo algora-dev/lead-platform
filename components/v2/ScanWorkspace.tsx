@@ -173,7 +173,7 @@ export default function ScanWorkspace() {
               {strategies.length > 0 ? (
                 <button className="primary" onClick={() => setShowCreate(true)}>Run your first scan</button>
               ) : (
-                <p className="muted">No approved strategies available. <a href="/v2/scans">Create and approve a strategy first</a>.</p>
+                <p className="muted">No approved strategies available. <a href="/v2/scans?tab=strategies">Create and approve a strategy first</a>.</p>
               )}
             </div>
           )}

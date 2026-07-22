@@ -307,7 +307,7 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
                 </div>
               </div>
             ))}
-            {!products.length && <div className="muted">No product profiles found. <a href="/v2/product-profiles">Create one first</a>.</div>}
+            {!products.length && <div className="muted">No product profiles found. <a href="/v2/profiles?tab=product">Create one first</a>.</div>}
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
               <button className="primary" disabled={!selectedProductVersions.length} onClick={() => setStep(2)}>Next →</button>
             </div>
@@ -332,7 +332,7 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
                 </div>
               </div>
             ))}
-            {!customers.length && <div className="muted">No customer profiles found. <a href="/v2/customer-profiles">Create one first</a>.</div>}
+            {!customers.length && <div className="muted">No customer profiles found. <a href="/v2/profiles?tab=customer">Create one first</a>.</div>}
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
               <button className="secondary" onClick={() => setStep(1)}>← Back</button>
               <button className="primary" disabled={!selectedCustomerVersions.length} onClick={() => setStep(3)}>Next →</button>

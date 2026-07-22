@@ -54,12 +54,12 @@ export default async function V2Dashboard() {
 
       {/* Stats Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16, marginTop: 24 }}>
-        <StatCard label="Scans" value={scans} href="/v2/scans" />
+        <StatCard label="Scans" value={scans} href="/v2/scans?tab=scans" />
         <StatCard label="Companies" value={companies} href="/v2/companies" />
         <StatCard label="Assessments" value={assessments} />
-        <StatCard label="Product Profiles" value={productProfiles} href="/v2/product-profiles" />
-        <StatCard label="Customer Profiles" value={customerProfiles} href="/v2/customer-profiles" />
-        <StatCard label="Strategies" value={strategies} href="/v2/strategies" />
+        <StatCard label="Product Profiles" value={productProfiles} href="/v2/profiles?tab=product" />
+        <StatCard label="Customer Profiles" value={customerProfiles} href="/v2/profiles?tab=customer" />
+        <StatCard label="Strategies" value={strategies} href="/v2/scans?tab=strategies" />
       </div>
 
       {/* Top Opportunities */}
