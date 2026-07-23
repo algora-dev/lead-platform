@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getTenantId } from '@/lib/auth';
 import { compileStrategy, type StrategyInput, COMPILER_VERSION } from '@/lib/v2/strategy-compiler';
 import { validateStrategy } from '@/lib/v2/strategy-validator';
+import { generateAssessment, AssessmentError } from '@/lib/v3/ai-assessment';
+import { ASSESSMENT_PROMPT_VERSION } from '@/lib/v3/strategy-assessment-schema';
 
 export async function GET() {
   const session = await getSession();
@@ -13,6 +15,7 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
     include: {
       scans: { orderBy: { createdAt: 'desc' }, take: 3, select: { id: true, name: true, status: true, createdAt: true } },
+      currentAssessment: { select: { id: true, understandingSummary: true, status: true } },
     },
   });
 
@@ -45,9 +48,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'country is required' }, { status: 400 });
   }
 
-  // Fetch the selected profile versions (verify tenant ownership)
   const tid = getTenantId(session);
 
+  // Fetch the selected profile versions (verify tenant ownership)
   const productVersions = await prisma.productProfileVersion.findMany({
     where: {
       id: { in: productProfileVersionIds },
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'One or more customer profile versions not found' }, { status: 404 });
   }
 
-  // Compile the strategy
+  // Compile the v2 strategy (for backward compat — queries, keywords, etc.)
   const compiled = compileStrategy(productVersions, customerVersions, {
     country,
     stateProvince,
@@ -104,6 +107,7 @@ export async function POST(req: NextRequest) {
 
   const strategyName = name?.trim() || compiled.defaultName;
 
+  // Create strategy with ASSESSING status
   const strategy = await prisma.discoveryStrategy.create({
     data: {
       tenantId: tid,
@@ -130,8 +134,61 @@ export async function POST(req: NextRequest) {
         geographyString: compiled.geographyString,
       } as any,
       compilerVersion: COMPILER_VERSION,
+      preparationStatus: 'ASSESSING',
     },
   });
 
-  return NextResponse.json({ strategy, validation }, { status: 201 });
+  // Call AI for assessment
+  try {
+    const assessment = await generateAssessment({
+      productVersions: productVersions as any,
+      customerVersions: customerVersions as any,
+      geography: { country, stateProvince, county, city, radiusKm },
+    });
+
+    // Save assessment and update strategy
+    const assessmentRecord = await prisma.strategyAssessment.create({
+      data: {
+        strategyId: strategy.id,
+        understandingSummary: assessment.understandingSummary,
+        scoringKeywords: assessment.scoringKeywords as any,
+        broadQueries: assessment.broadQueries,
+        aiModel: assessment.aiModel,
+        aiPromptVersion: assessment.aiPromptVersion,
+        status: 'PENDING',
+      },
+    });
+
+    await prisma.discoveryStrategy.update({
+      where: { id: strategy.id },
+      data: {
+        currentAssessmentId: assessmentRecord.id,
+        preparationStatus: 'AWAITING_CONFIRMATION',
+      },
+    });
+
+    return NextResponse.json({
+      strategyId: strategy.id,
+      assessment: assessmentRecord,
+    }, { status: 201 });
+
+  } catch (e: any) {
+    // Save error but keep strategy
+    await prisma.discoveryStrategy.update({
+      where: { id: strategy.id },
+      data: {
+        preparationStatus: 'FAILED',
+        assessmentError: e.message || 'Unknown assessment error',
+      },
+    });
+
+    const code = e instanceof AssessmentError ? e.code : 'AI_CALL_FAILED';
+    const status = code === 'INVALID_OUTPUT' ? 422 : 502;
+
+    return NextResponse.json({
+      error: 'Strategy created but AI assessment failed',
+      detail: e.message,
+      strategyId: strategy.id,
+    }, { status });
+  }
 }

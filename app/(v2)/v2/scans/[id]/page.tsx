@@ -6,6 +6,7 @@ import { runner } from '@/lib/v2/job-runner';
 import '@/lib/v2/evidence-handler';
 import '@/lib/v2/assessment-handler';
 import ScanActions from '@/components/v2/ScanActions';
+import CandidateTable from '@/components/v2/CandidateTable';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
   const scan = await prisma.discoveryScan.findFirst({
     where: { id: scanId, tenantId: tid },
     include: {
-      strategy: { select: { id: true, country: true, stateProvince: true, city: true } },
+      strategy: { select: { id: true, country: true, stateProvince: true, city: true, scoreThreshold: true } },
       library: { select: { id: true, name: true } },
       candidates: {
         include: {
@@ -47,6 +48,27 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
   });
 
   if (!scan) notFound();
+
+  // Serialize candidates for client component
+  const serializedCandidates = scan.candidates.map(c => ({
+    id: c.id,
+    profileScore: c.profileScore,
+    profileScoreBreakdown: c.profileScoreBreakdown,
+    keywordMatches: c.keywordMatches,
+    discoveryProvider: c.discoveryProvider,
+    discoveryQuery: c.discoveryQuery,
+    evidenceGathered: c.evidenceGathered,
+    selectedForEvidence: c.selectedForEvidence,
+    company: {
+      id: c.company.id,
+      name: c.company.name,
+      website: c.company.website,
+      country: c.company.country,
+      industry: c.company.industry,
+      employeeRange: c.company.employeeRange,
+      domain: c.company.domain,
+    },
+  }));
 
   return (
     <div className="page-header">
@@ -75,6 +97,7 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
         <StatBox label="New Companies" value={scan.newCompanies} />
         <StatBox label="Evidence Items" value={scan.providerRuns.filter(pr => pr.role === 'evidence').reduce((sum, pr) => sum + pr.resultCount, 0)} />
         <StatBox label="Assessments" value={scan.assessments.length} />
+        <StatBox label="Selected" value={scan.candidates.filter(c => c.selectedForEvidence).length} />
       </div>
 
       {/* Provider Runs */}
@@ -161,51 +184,13 @@ export default async function ScanDetailPage({ params }: { params: Promise<{ id:
         </div>
       )}
 
-      {/* Candidates */}
-      <div className="card" style={{ marginTop: 24 }}>
-        <div className="card-head">
-          <h2>Candidates ({scan.candidates.length})</h2>
-        </div>
-        {scan.candidates.length === 0 ? (
-          <div style={{ padding: 16, color: '#6b7280' }}>No candidates in this scan.</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
-                  <th style={{ padding: '8px 12px' }}>Company</th>
-                  <th style={{ padding: '8px 12px' }}>Industry</th>
-                  <th style={{ padding: '8px 12px' }}>Location</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'center' }}>Profile Score</th>
-                  <th style={{ padding: '8px 12px', textAlign: 'center' }}>Evidence</th>
-                  <th style={{ padding: '8px 12px' }}>Provider</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scan.candidates.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '8px 12px' }}>
-                      <a href={`/v2/companies/${c.company.id}`}>{c.company.name}</a>
-                      {c.company.domain && (
-                        <div style={{ fontSize: 12, color: '#9ca3af' }}>{c.company.domain}</div>
-                      )}
-                    </td>
-                    <td style={{ padding: '8px 12px', color: '#6b7280' }}>{c.company.industry || '—'}</td>
-                    <td style={{ padding: '8px 12px', color: '#6b7280' }}>{c.company.country || '—'}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                      <ScorePill score={c.profileScore} />
-                    </td>
-                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                      {c.evidenceGathered ? '✓' : '—'}
-                    </td>
-                    <td style={{ padding: '8px 12px', color: '#6b7280' }}>{c.discoveryProvider}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* v3 Candidate Table (interactive) */}
+      <CandidateTable
+        scanId={scan.id}
+        candidates={serializedCandidates}
+        strategyScoreThreshold={scan.strategy.scoreThreshold ?? 0}
+        scanStatus={scan.status}
+      />
     </div>
   );
 }

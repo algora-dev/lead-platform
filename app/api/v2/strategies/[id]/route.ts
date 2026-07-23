@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession, getTenantId } from '@/lib/auth';
 import { validateStrategy } from '@/lib/v2/strategy-validator';
+import { validateUserKeywords } from '@/lib/v3/strategy-assessment-schema';
 
 export async function GET(
   _req: NextRequest,
@@ -15,6 +16,11 @@ export async function GET(
     where: { id: parseInt(id), tenantId: getTenantId(session) },
     include: {
       scans: { orderBy: { createdAt: 'desc' } },
+      assessments: {
+        orderBy: { createdAt: 'desc' },
+        include: { parentAssessment: { select: { id: true } } },
+      },
+      currentAssessment: true,
     },
   });
 
@@ -31,16 +37,35 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const { approved, approvedBy } = body;
+  const { approved, approvedBy, scoreThreshold } = body;
 
   const existing = await prisma.discoveryStrategy.findFirst({
     where: { id: parseInt(id), tenantId: getTenantId(session) },
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  // If approving, validate the strategy is valid first
+  // v3: score threshold update
+  if (scoreThreshold !== undefined) {
+    const threshold = parseInt(scoreThreshold);
+    if (isNaN(threshold) || threshold < 0 || threshold > 100) {
+      return NextResponse.json({ error: 'scoreThreshold must be 0-100' }, { status: 422 });
+    }
+    const updated = await prisma.discoveryStrategy.update({
+      where: { id: parseInt(id) },
+      data: { scoreThreshold: threshold },
+    });
+    return NextResponse.json(updated);
+  }
+
+  // v2 backward compat: approve flow
   if (approved && !existing.approved) {
-    // Fetch linked profile versions to check readiness
+    // If this is a v3 strategy, it must be READY to approve
+    if (existing.preparationStatus && existing.preparationStatus !== 'READY') {
+      return NextResponse.json({
+        error: `Cannot approve: strategy preparation status is ${existing.preparationStatus}. Complete assessment confirmation first.`,
+      }, { status: 409 });
+    }
+
     const productVersions = await prisma.productProfileVersion.findMany({
       where: { id: { in: existing.productProfileVersionIds } },
       select: { id: true, approvedBy: true, approvedAt: true, rawInput: true },
@@ -97,7 +122,6 @@ export async function DELETE(
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  // Check no scans are using it
   const scanCount = await prisma.discoveryScan.count({
     where: { strategyId: parseInt(id) },
   });

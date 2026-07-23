@@ -1,7 +1,10 @@
 /**
  * POST /api/v2/scans/[id]/evidence
  * Triggers evidence gathering for a scan that has completed discovery.
- * Returns a job ID for progress tracking.
+ * Accepts optional { candidateIds, refresh } in body.
+ * - If candidateIds provided: gather evidence for those specific candidates
+ * - If candidateIds omitted: use candidates with selectedForEvidence = true
+ * - refresh=true: re-gather even if already gathered
  */
 
 import { prisma } from '@/lib/prisma';
@@ -11,7 +14,7 @@ import { runner } from '@/lib/v2/job-runner';
 import '@/lib/v2/evidence-handler'; // register handler
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
@@ -19,11 +22,12 @@ export async function POST(
 
   const { id } = await params;
   const tid = getTenantId(session);
+  const scanId = parseInt(id);
 
   const scan = await prisma.discoveryScan.findFirst({
-    where: { id: parseInt(id), tenantId: tid },
+    where: { id: scanId, tenantId: tid },
     include: {
-      candidates: { select: { id: true, evidenceGathered: true } },
+      candidates: { select: { id: true, evidenceGathered: true, selectedForEvidence: true } },
     },
   });
 
@@ -36,23 +40,74 @@ export async function POST(
     );
   }
 
-  if (scan.candidates.length === 0) {
-    return NextResponse.json({ error: 'No candidates in scan — nothing to gather evidence for.' }, { status: 400 });
+  // Parse body
+  let body: { candidateIds?: number[]; refresh?: boolean } = {};
+  try {
+    body = await req.json();
+  } catch {
+    // empty body is fine
   }
 
-  // Check if evidence already gathered
-  const alreadyGathered = scan.candidates.every(c => c.evidenceGathered);
-  if (alreadyGathered && scan.status === 'EVIDENCE_COMPLETE') {
-    return NextResponse.json({ error: 'Evidence already gathered for all candidates. Use rescan to refresh.' }, { status: 400 });
+  // Determine which candidates to process
+  let targetCandidateIds: number[];
+
+  if (body.candidateIds && Array.isArray(body.candidateIds) && body.candidateIds.length > 0) {
+    // Validate all IDs belong to this scan
+    const validIds = scan.candidates.map(c => c.id);
+    const invalid = body.candidateIds.filter(id => !validIds.includes(id));
+    if (invalid.length > 0) {
+      return NextResponse.json({
+        error: `${invalid.length} candidate ID(s) do not belong to scan ${scanId}`,
+      }, { status: 400 });
+    }
+    targetCandidateIds = body.candidateIds;
+  } else {
+    // Use selectedForEvidence candidates
+    targetCandidateIds = scan.candidates
+      .filter(c => c.selectedForEvidence)
+      .map(c => c.id);
+
+    if (targetCandidateIds.length === 0) {
+      return NextResponse.json({
+        error: 'No candidates selected for evidence gathering. Select candidates first or pass candidateIds in body.',
+      }, { status: 400 });
+    }
   }
 
-  // Create evidence gathering job
+  // Filter out already-gathered unless refresh
+  if (!body.refresh) {
+    const gatheredSet = new Set(scan.candidates.filter(c => c.evidenceGathered).map(c => c.id));
+    targetCandidateIds = targetCandidateIds.filter(id => !gatheredSet.has(id));
+  }
+
+  if (targetCandidateIds.length === 0) {
+    return NextResponse.json({
+      error: 'All target candidates already have evidence gathered. Use refresh=true to re-gather.',
+    }, { status: 400 });
+  }
+
+  // Check for existing active evidence job
+  const activeJobs = await runner.listActive(scanId, 'evidence-gathering');
+  if (activeJobs.length > 0) {
+    return NextResponse.json({
+      error: 'Evidence gathering already in progress for this scan',
+      jobId: activeJobs[0].id,
+    }, { status: 409 });
+  }
+
+  // Create evidence gathering job with frozen candidate IDs
   const jobId = await runner.create('evidence-gathering', {
     scanId: scan.id,
     tenantId: tid,
+    candidateIds: targetCandidateIds,
+    refresh: body.refresh || false,
   });
 
-  return NextResponse.json({ scanId: scan.id, jobId }, { status: 202 });
+  return NextResponse.json({
+    scanId: scan.id,
+    jobId,
+    candidateCount: targetCandidateIds.length,
+  }, { status: 202 });
 }
 
 /**
@@ -76,7 +131,6 @@ export async function GET(
 
   if (!scan) return NextResponse.json({ error: 'Scan not found' }, { status: 404 });
 
-  // Get evidence items linked to this scan
   const evidenceItems = await prisma.evidenceItem.findMany({
     where: { scanId: scan.id },
     include: {
@@ -96,7 +150,6 @@ export async function GET(
     orderBy: { collectedAt: 'desc' },
   });
 
-  // Summary stats
   const summary = {
     totalItems: evidenceItems.length,
     totalClaims: evidenceItems.reduce((sum, item) => sum + item.claims.length, 0),

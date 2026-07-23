@@ -1,12 +1,22 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import AssessmentModal from './AssessmentModal';
+import { type KeywordItem } from './KeywordEditor';
 
 interface Profile {
   id: number;
   name: string;
   description: string | null;
   versions: { id: number; versionNumber: number; createdAt: string }[];
+}
+
+interface Assessment {
+  id: number;
+  understandingSummary: string;
+  scoringKeywords: KeywordItem[];
+  broadQueries: string[];
+  status: string;
 }
 
 interface Strategy {
@@ -27,6 +37,12 @@ interface Strategy {
   evidencePriorities: string[];
   enrichmentPriorities: string[];
   scoringConfig: any;
+  preparationStatus?: string;
+  assessmentError?: string | null;
+  finalKeywords?: { keyword: string; points: number }[] | null;
+  finalQueries?: string[] | null;
+  scoreThreshold?: number;
+  currentAssessment?: Assessment | null;
   scans?: { id: number; name: string; status: string; createdAt: string }[];
 }
 
@@ -39,6 +55,7 @@ export default function StrategyWorkspace() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [selected, setSelected] = useState<Strategy | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showAssessment, setShowAssessment] = useState(false);
   const [notice, setNotice] = useState('');
 
   const load = useCallback(() => {
@@ -52,18 +69,16 @@ export default function StrategyWorkspace() {
   const openStrategy = async (id: number) => {
     const d = await fetch(`/api/v2/strategies/${id}`).then(r => r.json());
     setSelected(d);
+    // Auto-open assessment modal if strategy is awaiting confirmation
+    if (d.preparationStatus === 'AWAITING_CONFIRMATION' && d.currentAssessment) {
+      setShowAssessment(true);
+    }
   };
 
-  const approve = async (id: number, approver: string) => {
-    const r = await fetch(`/api/v2/strategies/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approved: true, approvedBy: approver }),
-    });
-    if (r.ok) {
-      setNotice('Strategy approved — ready for scans');
-      openStrategy(id);
-    }
+  const handleAssessmentConfirmed = () => {
+    setShowAssessment(false);
+    setNotice('Strategy confirmed — ready for scans');
+    if (selected) openStrategy(selected.id);
   };
 
   // --- List View ---
@@ -87,8 +102,7 @@ export default function StrategyWorkspace() {
               <tr>
                 <th>Name</th>
                 <th>Country</th>
-                <th>Queries</th>
-                <th>Approved</th>
+                <th>Status</th>
                 <th>Created</th>
               </tr>
             </thead>
@@ -97,12 +111,7 @@ export default function StrategyWorkspace() {
                 <tr key={s.id} style={{ cursor: 'pointer' }} onClick={() => openStrategy(s.id)}>
                   <td><strong>{s.name || `Strategy #${s.id}`}</strong></td>
                   <td>{s.country}{s.stateProvince ? `, ${s.stateProvince}` : ''}</td>
-                  <td>{Array.isArray(s.queries) ? s.queries.length : 0}</td>
-                  <td>
-                    {s.approved
-                      ? <span className="pill good">Approved</span>
-                      : <span className="pill neutral">Draft</span>}
-                  </td>
+                  <td>{renderStatus(s)}</td>
                   <td>{new Date(s.createdAt).toLocaleDateString()}</td>
                 </tr>
               ))}
@@ -133,78 +142,99 @@ export default function StrategyWorkspace() {
         </p>
       </div>
 
-      <div className="card">
-        <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2>Search Queries ({Array.isArray(selected.queries) ? selected.queries.length : 0})</h2>
-          {!selected.approved && (
-            <button className="primary" style={{ fontSize: '0.85rem' }} onClick={() => approve(selected.id, 'Shaun')}>Approve Strategy</button>
+      {/* Status banner */}
+      {selected.preparationStatus && selected.preparationStatus !== 'READY' && (
+        <div style={{
+          padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 14,
+          background: statusBg(selected.preparationStatus),
+          border: `1px solid ${statusBorder(selected.preparationStatus)}`,
+        }}>
+          {selected.preparationStatus === 'ASSESSING' && '🤖 AI is assessing your profiles...'}
+          {selected.preparationStatus === 'AWAITING_CONFIRMATION' && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>⏳ AI assessment ready — review and confirm to enable scanning.</span>
+              <button className="primary" style={{ fontSize: 13, padding: '6px 14px' }} onClick={() => setShowAssessment(true)}>Review Assessment</button>
+            </div>
           )}
+          {selected.preparationStatus === 'FAILED' && `❌ Assessment failed: ${selected.assessmentError || 'Unknown error'}`}
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Query</th>
-              <th>Type</th>
-              <th>Rationale</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Array.isArray(selected.queries) && selected.queries.map((q: any, i: number) => (
-              <tr key={i}>
-                <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{q.query}</td>
-                <td><span className="pill neutral">{q.type}</span></td>
-                <td style={{ fontSize: 12 }} className="muted">{q.rationale}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
-        <div className="card">
-          <div className="card-head"><h2>Keywords ({selected.keywords?.length || 0})</h2></div>
-          <div style={{ padding: 16, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {selected.keywords?.map((k, i) => (
-              <span key={i} style={{ background: '#f3f4f6', padding: '2px 8px', borderRadius: 12, fontSize: 13 }}>{k}</span>
-            ))}
+      {/* v3: AI Assessment Summary (if confirmed) */}
+      {selected.currentAssessment && selected.currentAssessment.status === 'CONFIRMED' && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-head"><h2>📋 AI Understanding</h2></div>
+          <div style={{ padding: 16 }}>
+            <p style={{ fontSize: 14, lineHeight: 1.5 }}>{selected.currentAssessment.understandingSummary}</p>
           </div>
         </div>
-        <div className="card">
-          <div className="card-head"><h2>Filters</h2></div>
+      )}
+
+      {/* v3: Confirmed Keywords */}
+      {selected.finalKeywords && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2>🎯 Scoring Keywords</h2>
+            <span style={{ fontSize: 13, color: '#6b7280' }}>Threshold: {selected.scoreThreshold ?? 0}</span>
+          </div>
           <div style={{ padding: 16 }}>
-            <strong style={{ fontSize: 13 }}>Inclusion:</strong>
-            <ul style={{ fontSize: 13, marginLeft: 16 }}>
-              {selected.inclusionFilters?.map((f, i) => <li key={i}>{f}</li>)}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {(selected.finalKeywords as { keyword: string; points: number }[]).map((k, i) => (
+                <span key={i} style={{
+                  background: '#eff6ff', padding: '4px 12px', borderRadius: 12,
+                  fontSize: 13, border: '1px solid #bfdbfe',
+                }}>
+                  {k.keyword} <strong style={{ color: '#2563eb' }}>{k.points}pts</strong>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* v3: Broad Queries */}
+      {selected.finalQueries && selected.finalQueries.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-head"><h2>🔍 Search Queries</h2></div>
+          <div style={{ padding: 16 }}>
+            <ul style={{ fontSize: 13, marginLeft: 16, lineHeight: 1.8 }}>
+              {selected.finalQueries.map((q, i) => <li key={i} style={{ fontFamily: 'monospace' }}>{q}</li>)}
             </ul>
-            {selected.exclusionFilters?.length > 0 && (
-              <>
-                <strong style={{ fontSize: 13 }}>Exclusion:</strong>
-                <ul style={{ fontSize: 13, marginLeft: 16 }}>
-                  {selected.exclusionFilters.map((f, i) => <li key={i}>{f}</li>)}
-                </ul>
-              </>
+          </div>
+        </div>
+      )}
+
+      {/* v2 backward compat: old queries (only if no finalQueries) */}
+      {!selected.finalQueries && Array.isArray(selected.queries) && selected.queries.length > 0 && (
+        <div className="card">
+          <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2>Search Queries ({selected.queries.length})</h2>
+            {!selected.approved && selected.preparationStatus === undefined && (
+              <button className="primary" style={{ fontSize: '0.85rem' }} onClick={async () => {
+                await fetch(`/api/v2/strategies/${selected.id}`, {
+                  method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ approved: true, approvedBy: 'Shaun' }),
+                });
+                openStrategy(selected.id);
+              }}>Approve Strategy</button>
             )}
           </div>
+          <table>
+            <thead><tr><th>Query</th><th>Type</th><th>Rationale</th></tr></thead>
+            <tbody>
+              {selected.queries.map((q: any, i: number) => (
+                <tr key={i}>
+                  <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{q.query}</td>
+                  <td><span className="pill neutral">{q.type}</span></td>
+                  <td style={{ fontSize: 12 }} className="muted">{q.rationale}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
-        <div className="card">
-          <div className="card-head"><h2>Evidence Priorities</h2></div>
-          <div style={{ padding: 16 }}>
-            <ol style={{ fontSize: 13, marginLeft: 16 }}>
-              {selected.evidencePriorities?.map((e, i) => <li key={i}>{e}</li>)}
-            </ol>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-head"><h2>Scoring Config</h2></div>
-          <pre style={{ padding: 16, fontSize: 11, overflow: 'auto', maxHeight: 300 }}>
-            {JSON.stringify(selected.scoringConfig, null, 2)}
-          </pre>
-        </div>
-      </div>
-
+      {/* Scans */}
       {selected.scans && selected.scans.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-head"><h2>Scans using this strategy</h2></div>
@@ -224,8 +254,46 @@ export default function StrategyWorkspace() {
       )}
 
       {notice && <div className="muted" style={{ marginTop: 8, textAlign: 'center' }}>{notice}</div>}
+
+      {/* Assessment Modal */}
+      {showAssessment && selected.currentAssessment && (
+        <AssessmentModal
+          strategyId={selected.id}
+          assessment={selected.currentAssessment}
+          onConfirmed={handleAssessmentConfirmed}
+          onClose={() => setShowAssessment(false)}
+        />
+      )}
     </>
   );
+
+  function renderStatus(s: Strategy): React.ReactNode {
+    const ps = s.preparationStatus;
+    if (!ps) {
+      return s.approved
+        ? <span className="pill good">Approved</span>
+        : <span className="pill neutral">Draft</span>;
+    }
+    if (ps === 'READY') return <span className="pill good">Ready</span>;
+    if (ps === 'AWAITING_CONFIRMATION') return <span className="pill neutral" style={{ background: '#fef3c7', color: '#92400e' }}>Awaiting Review</span>;
+    if (ps === 'ASSESSING') return <span className="pill neutral" style={{ background: '#dbeafe', color: '#1e40af' }}>Assessing</span>;
+    if (ps === 'FAILED') return <span className="pill neutral" style={{ background: '#fee2e2', color: '#991b1b' }}>Failed</span>;
+    return <span className="pill neutral">{ps}</span>;
+  }
+}
+
+function statusBg(ps: string): string {
+  if (ps === 'ASSESSING') return '#dbeafe';
+  if (ps === 'AWAITING_CONFIRMATION') return '#fef3c7';
+  if (ps === 'FAILED') return '#fee2e2';
+  return '#f3f4f6';
+}
+
+function statusBorder(ps: string): string {
+  if (ps === 'ASSESSING') return '#93c5fd';
+  if (ps === 'AWAITING_CONFIRMATION') return '#fcd34d';
+  if (ps === 'FAILED') return '#fca5a5';
+  return '#d1d5db';
 }
 
 function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void; onClose: () => void }) {
@@ -239,7 +307,6 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
   const [county, setCounty] = useState('');
   const [city, setCity] = useState('');
   const [radiusKm, setRadiusKm] = useState('');
-  const [preview, setPreview] = useState<any>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
@@ -274,9 +341,9 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
       });
       const d = await r.json();
       if (r.ok) {
-        onCreated(d.id);
+        onCreated(d.strategyId || d.id);
       } else {
-        setError(d.error || 'Failed to create strategy');
+        setError(d.error || d.detail || 'Failed to create strategy');
       }
     } catch (e: any) {
       setError(e.message);
@@ -378,13 +445,14 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
                 <li>Lead versions: {selectedCustomerVersions.length}</li>
                 <li>Location: {country}{stateProvince ? `, ${stateProvince}` : ''}{city ? `, ${city}` : ''}{radiusKm ? ` (${radiusKm}km radius)` : ''}</li>
               </ul>
+              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>After creation, AI will assess both profiles and generate a strategy for your review.</p>
             </div>
 
             {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 8 }}>{error}</div>}
 
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
               <button className="secondary" onClick={() => setStep(2)}>← Back</button>
-              <button className="primary" disabled={creating} onClick={create}>{creating ? 'Compiling…' : 'Compile Strategy'}</button>
+              <button className="primary" disabled={creating} onClick={create}>{creating ? 'Creating + AI Assessing…' : 'Create & Assess'}</button>
             </div>
           </div>
         )}

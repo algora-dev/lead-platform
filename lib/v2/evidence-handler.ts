@@ -5,6 +5,8 @@
  * that has already completed discovery. Can be triggered:
  *  - Automatically after discovery (if strategy has evidence priorities)
  *  - Manually via POST /api/v2/scans/[id]/evidence
+ *
+ * v3: supports frozen candidate IDs and refresh flag from payload.
  */
 
 import { prisma } from '@/lib/prisma';
@@ -14,9 +16,17 @@ import { runEvidenceEngine } from '@/lib/v2/evidence-engine';
 export const evidenceGatheringHandler: JobHandler = {
   type: 'evidence-gathering',
   async execute(jobId, payload, updateProgress) {
-    const { scanId, tenantId } = payload as { scanId: number; tenantId: number };
+    const { scanId, tenantId, candidateIds, refresh } = payload as {
+      scanId: number;
+      tenantId: number;
+      candidateIds?: number[];
+      refresh?: boolean;
+    };
 
-    const result = await runEvidenceEngine(scanId, tenantId, updateProgress);
+    const result = await runEvidenceEngine(scanId, tenantId, updateProgress, {
+      candidateIds,
+      refresh,
+    });
 
     return result;
   },

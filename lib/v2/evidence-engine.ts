@@ -35,7 +35,8 @@ export interface EvidenceEngineResult {
 export async function runEvidenceEngine(
   scanId: number,
   tenantId: number,
-  updateProgress?: (progress: number, message: string) => void
+  updateProgress?: (progress: number, message: string) => void,
+  options?: { candidateIds?: number[]; refresh?: boolean }
 ): Promise<EvidenceEngineResult> {
   const scan = await prisma.discoveryScan.findUnique({
     where: { id: scanId },
@@ -50,6 +51,18 @@ export async function runEvidenceEngine(
 
   if (!scan) throw new Error(`Scan ${scanId} not found`);
   if (!scan.strategy) throw new Error(`Strategy not found for scan ${scanId}`);
+
+  // Filter candidates if frozen IDs provided
+  let candidates = scan.candidates;
+  if (options?.candidateIds && options.candidateIds.length > 0) {
+    const idSet = new Set(options.candidateIds);
+    candidates = candidates.filter(c => idSet.has(c.id));
+  }
+
+  // Skip already-gathered unless refresh
+  if (!options?.refresh) {
+    candidates = candidates.filter(c => !c.evidenceGathered);
+  }
 
   // Parse evidence priorities from strategy
   const evidencePriorities = Array.isArray(scan.strategy.evidencePriorities)

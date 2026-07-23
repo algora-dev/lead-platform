@@ -375,6 +375,16 @@ model DiscoveryStrategy {
   approvedBy      String?
   approvedAt      DateTime?
   scans           DiscoveryScan[]
+
+  // v3 fields
+  assessments          StrategyAssessment[] @relation("StrategyAssessmentHistory")
+  currentAssessmentId  Int? @unique
+  currentAssessment    StrategyAssessment? @relation("CurrentStrategyAssessment", fields: [currentAssessmentId], references: [id], onDelete: SetNull)
+  preparationStatus    StrategyPreparationStatus @default(ASSESSING)
+  assessmentError      String?
+  finalKeywords        Json?
+  finalQueries         String[] @default([])
+  scoreThreshold       Int @default(0)
 }
 
 // --- Scan Library ---
@@ -458,6 +468,10 @@ model ScanCandidate {
   // Processing state
   evidenceGathered  Boolean   @default(false)
   assessmentDone    Boolean   @default(false)
+  // v3 fields
+  discoveryData        Json?
+  keywordMatches       Json?
+  selectedForEvidence  Boolean @default(false)
   @@unique([scanId, companyId])
 }
 
@@ -603,4 +617,53 @@ model AssessmentSnapshot {
   // Prior comparison
   priorSnapshotId    Int?
   scoreChange        Int?   // combined score delta vs prior
+}
+
+// ============================================================
+// v3 Strategy Assessment System
+// ============================================================
+
+enum StrategyAssessmentStatus {
+  PENDING
+  CONFIRMED
+  SUPERSEDED
+}
+
+enum StrategyPreparationStatus {
+  ASSESSING
+  AWAITING_CONFIRMATION
+  READY
+  FAILED
+}
+
+model StrategyAssessment {
+  id                   Int      @id @default(autoincrement())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  strategyId           Int
+  strategy             DiscoveryStrategy @relation("StrategyAssessmentHistory", fields: [strategyId], references: [id], onDelete: Cascade)
+
+  // AI Assessment Output
+  understandingSummary String
+  scoringKeywords      Json     // [{ keyword, points, rationale }]
+  broadQueries         String[] @default([])
+
+  // AI metadata
+  aiModel              String?
+  aiPromptVersion      String?
+
+  // User Confirmation State
+  status               StrategyAssessmentStatus @default(PENDING)
+  userClarification    String?
+  userEditedKeywords   Json?
+  confirmedBy          String?
+  confirmedAt          DateTime?
+
+  // Rebuild chain
+  parentAssessmentId   Int?
+  parentAssessment     StrategyAssessment? @relation("AssessmentRebuild", fields: [parentAssessmentId], references: [id], onDelete: SetNull)
+  rebuilds             StrategyAssessment[] @relation("AssessmentRebuild")
+  currentForStrategy   DiscoveryStrategy? @relation("CurrentStrategyAssessment")
+
+  @@index([strategyId, createdAt])
 }

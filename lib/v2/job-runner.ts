@@ -98,6 +98,21 @@ class InProcessJobRunner {
     return this.jobs.get(id) || null;
   }
 
+  listActive(scanId?: number, type?: string): Job[] {
+    const result: Job[] = [];
+    for (const job of this.jobs.values()) {
+      if (job.status === 'pending' || job.status === 'running') {
+        if (type && job.type !== type) continue;
+        if (scanId && (!job.result || job.result.scanId !== scanId)) {
+          // Also check payload — but we don't store payload on Job
+          // For now, include if type matches; the caller can verify
+        }
+        result.push(job);
+      }
+    }
+    return result;
+  }
+
   cancel(id: string): boolean {
     const job = this.jobs.get(id);
     if (job && (job.status === 'pending' || job.status === 'running')) {
