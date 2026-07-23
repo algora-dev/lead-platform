@@ -192,3 +192,49 @@ export async function POST(req: NextRequest) {
     }, { status });
   }
 }
+
+/**
+ * DELETE /api/v2/strategies
+ * Batch delete strategies by IDs.
+ * Body: { ids: number[] }
+ * Strategies with associated scans cannot be deleted.
+ */
+export async function DELETE(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  const ids: number[] = body.ids;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: 'ids array is required' }, { status: 400 });
+  }
+
+  const tid = getTenantId(session);
+
+  // Check for scans referencing any of these strategies
+  const strategiesWithScans = await prisma.discoveryScan.groupBy({
+    by: ['strategyId'],
+    where: { strategyId: { in: ids }, tenantId: tid },
+    _count: { id: true },
+  });
+
+  if (strategiesWithScans.length > 0) {
+    const blocked = strategiesWithScans.map(s => `Strategy ${s.strategyId} has ${s._count.id} scan(s)`);
+    return NextResponse.json({
+      error: `Cannot delete: ${blocked.join(', ')}`,
+      blockedIds: strategiesWithScans.map(s => s.strategyId),
+    }, { status: 409 });
+  }
+
+  // Delete assessments first (they reference strategies)
+  await prisma.strategyAssessment.deleteMany({
+    where: { strategyId: { in: ids } },
+  });
+
+  const result = await prisma.discoveryStrategy.deleteMany({
+    where: { id: { in: ids }, tenantId: tid },
+  });
+
+  return NextResponse.json({ ok: true, deleted: result.count });
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { CheckIcon, ArrowUpIcon, ArrowDownIcon, EditIcon, CloseIcon } from './Icons';
 
 export interface KeywordItem {
   keyword: string;
@@ -73,8 +74,8 @@ export default function KeywordEditor({ keywords, onChange, maxKeywords = 10 }: 
     <div>
       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong style={{ fontSize: 14 }}>Scoring Keywords ({keywords.length}/{maxKeywords})</strong>
-        <span style={{ fontSize: 13, fontWeight: 600, color: pointsColor }}>
-          Total: {totalPoints}/100 {pointsValid ? '✓' : ''}
+        <span style={{ fontSize: 13, fontWeight: 600, color: pointsColor, display: 'flex', alignItems: 'center', gap: 4 }}>
+          Total: {totalPoints}/100 {pointsValid && <CheckIcon size={13} color={pointsColor} />}
         </span>
       </div>
 
@@ -113,10 +114,10 @@ export default function KeywordEditor({ keywords, onChange, maxKeywords = 10 }: 
               <>
                 <span style={{ flex: 1, fontSize: 13 }}>{kw.keyword}</span>
                 <span style={{ fontSize: 13, fontWeight: 600, minWidth: 50, textAlign: 'right', color: '#2563eb' }}>{kw.points} pts</span>
-                <button onClick={() => moveUp(i)} disabled={i === 0} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 3, cursor: i === 0 ? 'default' : 'pointer', fontSize: 11, padding: '1px 4px', opacity: i === 0 ? 0.4 : 1 }}>↑</button>
-                <button onClick={() => moveDown(i)} disabled={i === keywords.length - 1} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 3, cursor: i === keywords.length - 1 ? 'default' : 'pointer', fontSize: 11, padding: '1px 4px', opacity: i === keywords.length - 1 ? 0.4 : 1 }}>↓</button>
-                <button onClick={() => startEdit(i)} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 3, cursor: 'pointer', fontSize: 11, padding: '1px 6px' }}>✏</button>
-                <button onClick={() => remove(i)} style={{ background: 'none', border: '1px solid #fca5a5', borderRadius: 3, cursor: 'pointer', fontSize: 11, padding: '1px 6px', color: '#dc2626' }}>✕</button>
+                <button onClick={() => moveUp(i)} disabled={i === 0} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 3, cursor: i === 0 ? 'default' : 'pointer', padding: '2px 4px', opacity: i === 0 ? 0.4 : 1, display: 'flex', alignItems: 'center' }}><ArrowUpIcon size={12} /></button>
+                <button onClick={() => moveDown(i)} disabled={i === keywords.length - 1} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 3, cursor: i === keywords.length - 1 ? 'default' : 'pointer', padding: '2px 4px', opacity: i === keywords.length - 1 ? 0.4 : 1, display: 'flex', alignItems: 'center' }}><ArrowDownIcon size={12} /></button>
+                <button onClick={() => startEdit(i)} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 3, cursor: 'pointer', padding: '2px 6px', display: 'flex', alignItems: 'center' }}><EditIcon size={12} /></button>
+                <button onClick={() => remove(i)} style={{ background: 'none', border: '1px solid #fca5a5', borderRadius: 3, cursor: 'pointer', padding: '2px 6px', color: '#dc2626', display: 'flex', alignItems: 'center' }}><CloseIcon size={12} /></button>
               </>
             )}
           </div>

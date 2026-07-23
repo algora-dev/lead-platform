@@ -61,3 +61,29 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(profile, { status: 201 });
 }
+
+/**
+ * DELETE /api/v2/customer-profiles
+ * Batch delete (archive) customer profiles by IDs.
+ * Body: { ids: number[] }
+ */
+export async function DELETE(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  const ids: number[] = body.ids;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: 'ids array is required' }, { status: 400 });
+  }
+
+  const tid = getTenantId(session);
+
+  // Hard delete — versions cascade
+  const result = await prisma.customerProfile.deleteMany({
+    where: { id: { in: ids }, tenantId: tid, archivedAt: null },
+  });
+
+  return NextResponse.json({ ok: true, deleted: result.count });
+}

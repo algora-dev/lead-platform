@@ -114,3 +114,40 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ scan, jobId }, { status: 201 });
 }
+
+/**
+ * DELETE /api/v2/scans
+ * Batch delete scans by IDs.
+ * Body: { ids: number[] }
+ */
+export async function DELETE(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  const ids: number[] = body.ids;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: 'ids array is required' }, { status: 400 });
+  }
+
+  const tid = getTenantId(session);
+
+  // Verify all scans belong to tenant before deleting
+  const scans = await prisma.discoveryScan.findMany({
+    where: { id: { in: ids }, tenantId: tid },
+    select: { id: true },
+  });
+
+  const validIds = scans.map(s => s.id);
+  if (validIds.length === 0) {
+    return NextResponse.json({ error: 'No matching scans found' }, { status: 404 });
+  }
+
+  // Hard delete — cascades to ScanCandidate, ProviderRun, AssessmentSnapshot
+  const result = await prisma.discoveryScan.deleteMany({
+    where: { id: { in: validIds }, tenantId: tid },
+  });
+
+  return NextResponse.json({ ok: true, deleted: result.count });
+}

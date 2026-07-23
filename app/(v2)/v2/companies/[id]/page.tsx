@@ -111,7 +111,7 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
           <div className="card-head"><h2>Contradictions & Unknowns</h2></div>
           <div style={{ padding: 16 }}>
             {latestAssessment?.contradictions?.map((c, i) => (
-              <div key={i} style={{ padding: '4px 0', color: '#dc2626' }}>⚠ {c}</div>
+              <div key={i} style={{ padding: '4px 0', color: '#dc2626' }}><span style={{ fontWeight: 600 }}>Warning:</span> {c}</div>
             ))}
             {latestAssessment?.unknowns?.map((u, i) => (
               <div key={i} style={{ padding: '4px 0', color: '#6b7280' }}>? {u}</div>

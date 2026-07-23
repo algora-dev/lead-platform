@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { FlaskIcon, CheckIcon } from './Icons';
 
 interface Candidate {
   id: number;
@@ -161,7 +162,7 @@ export default function CandidateTable({ scanId, candidates: initialCandidates, 
             className="primary"
             style={{ fontSize: 12, padding: '4px 12px', opacity: (selectedIds.size === 0 || evidenceRunning) ? 0.5 : 1 }}
           >
-            {evidenceRunning ? 'Starting...' : `🔬 Evidence Scan (${selectedIds.size})`}
+            {evidenceRunning ? 'Starting...' : <><FlaskIcon size={13} /> Evidence Scan ({selectedIds.size})</>}
           </button>
         )}
       </div>
@@ -222,7 +223,7 @@ export default function CandidateTable({ scanId, candidates: initialCandidates, 
                     ) : '—'}
                   </td>
                   <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                    {c.evidenceGathered ? '✓' : '—'}
+                    {c.evidenceGathered ? <CheckIcon size={14} color='#16a34a' /> : '—'}
                   </td>
                   <td style={{ padding: '8px 12px', color: '#6b7280' }}>{c.discoveryProvider}</td>
                 </tr>

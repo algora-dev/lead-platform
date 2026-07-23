@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AlertIcon, FolderIcon } from './Icons';
 
 interface Library {
   id: number;
@@ -76,7 +77,7 @@ export default function LibraryManager({
         >
           {showCreate ? 'Cancel' : '+ New Library'}
         </button>
-        {error && <span style={{ fontSize: 13, color: '#dc2626' }}>⚠ {error}</span>}
+        {error && <span style={{ fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 4 }}><AlertIcon size={13} color="#dc2626" /> {error}</span>}
       </div>
 
       {showCreate && (
@@ -120,7 +121,7 @@ export default function LibraryManager({
       <div style={{ marginTop: 8 }}>
         {libraries.map((lib) => (
           <div key={lib.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
-            <span style={{ fontSize: 13, color: '#9ca3af' }}>📁 {lib.name}</span>
+            <span style={{ fontSize: 13, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 4 }}><FolderIcon size={13} color="#9ca3af" /> {lib.name}</span>
             <button
               onClick={() => deleteLibrary(lib.id)}
               style={{

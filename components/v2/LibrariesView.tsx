@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { AlertIcon } from './Icons';
 import Link from 'next/link';
 
 interface Library {
@@ -93,7 +94,7 @@ export default function LibrariesView() {
         <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreate(!showCreate)}>
           {showCreate ? 'Cancel' : '+ New Library'}
         </button>
-        {error && <span style={{ fontSize: 13, color: 'var(--bad)', marginLeft: 12 }}>⚠ {error}</span>}
+        {error && <span style={{ fontSize: 13, color: 'var(--bad)', marginLeft: 12, display: 'flex', alignItems: 'center', gap: 4 }}><AlertIcon size={13} color="var(--bad)" /> {error}</span>}
       </div>
 
       {showCreate && (

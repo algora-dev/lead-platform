@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import KeywordEditor, { type KeywordItem } from './KeywordEditor';
+import { TargetIcon, FileTextIcon, EditIcon, SearchIcon, RefreshIcon, CheckIcon, SlidersIcon } from './Icons';
 
 interface AssessmentData {
   id: number;
@@ -106,14 +107,14 @@ export default function AssessmentModal({ strategyId, assessment, onConfirmed, o
       <div className="card" style={{ width: '100%', maxWidth: 680, margin: '16px 0' }}>
         {/* Header */}
         <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2>🎯 AI Strategy Assessment</h2>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><TargetIcon size={18} /> AI Strategy Assessment</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#6b7280' }}>×</button>
         </div>
 
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Understanding */}
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>📋 AI Understanding</label>
+            <label style={{ display: 'flex', marginBottom: 6, fontSize: 13, fontWeight: 600, alignItems: 'center', gap: 4 }}><FileTextIcon size={14} /> AI Understanding</label>
             <div style={{
               padding: 12, background: '#f0f9ff', borderRadius: 6,
               border: '1px solid #bae6fd', fontSize: 14, lineHeight: 1.5,
@@ -124,8 +125,8 @@ export default function AssessmentModal({ strategyId, assessment, onConfirmed, o
 
           {/* Clarification */}
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
-              ✏️ Clarification <span style={{ fontWeight: 400, color: '#6b7280' }}>(optional — AI will rebuild if filled)</span>
+            <label style={{ display: 'flex', marginBottom: 6, fontSize: 13, fontWeight: 600, alignItems: 'center', gap: 4 }}>
+              <EditIcon size={14} /> Clarification <span style={{ fontWeight: 400, color: '#6b7280' }}>(optional — AI will rebuild if filled)</span>
             </label>
             <textarea
               value={clarification}
@@ -147,8 +148,8 @@ export default function AssessmentModal({ strategyId, assessment, onConfirmed, o
 
           {/* Score Threshold */}
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
-              🎚️ Score Threshold: <span style={{ color: '#2563eb' }}>{scoreThreshold}</span> <span style={{ fontWeight: 400, color: '#6b7280' }}>(candidates below this score are hidden)</span>
+            <label style={{ display: 'flex', marginBottom: 6, fontSize: 13, fontWeight: 600, alignItems: 'center', gap: 4 }}>
+              <SlidersIcon size={14} /> Score Threshold: <span style={{ color: '#2563eb' }}>{scoreThreshold}</span> <span style={{ fontWeight: 400, color: '#6b7280' }}>(candidates below this score are hidden)</span>
             </label>
             <input
               type="range"
@@ -163,7 +164,7 @@ export default function AssessmentModal({ strategyId, assessment, onConfirmed, o
           {/* Search Queries Preview */}
           {assessment.broadQueries && assessment.broadQueries.length > 0 && (
             <div>
-              <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>🔍 Search Queries (preview)</label>
+              <label style={{ display: 'flex', marginBottom: 6, fontSize: 13, fontWeight: 600, alignItems: 'center', gap: 4 }}><SearchIcon size={14} /> Search Queries (preview)</label>
               <ul style={{ fontSize: 13, marginLeft: 16, color: '#6b7280', lineHeight: 1.8 }}>
                 {assessment.broadQueries.map((q, i) => <li key={i} style={{ fontFamily: 'monospace' }}>{q}</li>)}
               </ul>
@@ -188,7 +189,7 @@ export default function AssessmentModal({ strategyId, assessment, onConfirmed, o
                 className="primary"
                 style={{ fontSize: 14, padding: '8px 16px', opacity: loading ? 0.6 : 1 }}
               >
-                {loading ? 'Rebuilding...' : '🔄 Rebuild with Clarification'}
+                {loading ? 'Rebuilding...' : <><RefreshIcon size={14} /> Rebuild with Clarification</>}
               </button>
             ) : (
               <button
@@ -197,7 +198,7 @@ export default function AssessmentModal({ strategyId, assessment, onConfirmed, o
                 className="primary"
                 style={{ fontSize: 14, padding: '8px 16px', opacity: (!canConfirm || loading) ? 0.6 : 1 }}
               >
-                {loading ? 'Confirming...' : '✓ Confirm Strategy'}
+                {loading ? 'Confirming...' : <><CheckIcon size={14} /> Confirm Strategy</>}
               </button>
             )}
           </div>

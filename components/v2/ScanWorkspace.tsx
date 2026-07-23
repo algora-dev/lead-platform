@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import DeleteModal from './DeleteModal';
+import { TrashIcon, ChevronLeftIcon } from './Icons';
 
 interface Strategy {
   id: number;
@@ -54,6 +56,10 @@ export default function ScanWorkspace() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [notice, setNotice] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
     fetch('/api/v2/scans').then(r => r.json()).then(d => {
@@ -111,6 +117,52 @@ export default function ScanWorkspace() {
     }
   };
 
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === scans.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(scans.map(s => s.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const r = await fetch('/api/v2/scans', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setShowDelete(false);
+        setSelectedIds(new Set());
+        setNotice(`Deleted ${d.deleted} scan(s)`);
+        load();
+      } else {
+        setDeleteError(d.error || 'Failed to delete');
+      }
+    } catch (e: any) {
+      setDeleteError(e.message);
+    }
+    setDeleting(false);
+  };
+
+  const handleSingleDelete = (id: number) => {
+    setSelectedIds(new Set([id]));
+    setShowDelete(true);
+  };
+
   // --- List View ---
   if (!selected) {
     return (
@@ -136,8 +188,22 @@ export default function ScanWorkspace() {
           </div>
         )}
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreate(true)}>+ New Scan</button>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => { setDeleteError(''); setShowDelete(true); }}
+              style={{
+                background: 'none', border: '1px solid #fca5a5', borderRadius: 4,
+                padding: '8px 14px', cursor: 'pointer', fontSize: '0.85rem',
+                color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+            >
+              <TrashIcon size={14} /> Delete {selectedIds.size} selected
+            </button>
+          )}
         </div>
 
         <div className="card">
@@ -147,25 +213,54 @@ export default function ScanWorkspace() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: 32 }}>
+                  <input
+                    type="checkbox"
+                    checked={scans.length > 0 && selectedIds.size === scans.length}
+                    onChange={toggleSelectAll}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
                 <th>Name</th>
                 <th>Status</th>
                 <th>Candidates</th>
                 <th>New</th>
                 <th>Created</th>
+                <th style={{ width: 40 }}></th>
               </tr>
             </thead>
             <tbody>
               {scans.map(s => (
-                <tr key={s.id} style={{ cursor: 'pointer' }} onClick={() => openScan(s.id)}>
-                  <td><strong>{s.name}</strong></td>
-                  <td>
+                <tr key={s.id}>
+                  <td onClick={e => { e.stopPropagation(); toggleSelect(s.id); }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(s.id)}
+                      onChange={() => {}}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => openScan(s.id)}>
+                    <strong>{s.name}</strong>
+                  </td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => openScan(s.id)}>
                     <span className={`pill ${s.status === 'COMPLETED' ? 'good' : s.status === 'FAILED' ? 'urgent' : 'neutral'}`}>
                       {s.status}
                     </span>
                   </td>
-                  <td>{s._count?.candidates || s.candidateCount || 0}</td>
-                  <td>{s.newCompanies || 0}</td>
-                  <td>{new Date(s.createdAt).toLocaleString()}</td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => openScan(s.id)}>{s._count?.candidates || s.candidateCount || 0}</td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => openScan(s.id)}>{s.newCompanies || 0}</td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => openScan(s.id)}>{new Date(s.createdAt).toLocaleString()}</td>
+                  <td>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleSingleDelete(s.id); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#9ca3af', display: 'flex', alignItems: 'center' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#dc2626'; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#9ca3af'; }}
+                    >
+                      <TrashIcon size={15} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -186,6 +281,16 @@ export default function ScanWorkspace() {
         {showCreate && (
           <CreateScanModal strategies={strategies} onCreate={startScan} onClose={() => setShowCreate(false)} />
         )}
+
+        <DeleteModal
+          open={showDelete}
+          count={selectedIds.size}
+          itemType="scan"
+          onConfirm={handleBulkDelete}
+          onCancel={() => { setShowDelete(false); setSelectedIds(new Set()); }}
+          loading={deleting}
+          error={deleteError}
+        />
       </>
     );
   }
@@ -194,12 +299,14 @@ export default function ScanWorkspace() {
   return (
     <>
       <div className="page-header">
-        <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginBottom: 8 }}>← Back to Scans</button>
+        <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <ChevronLeftIcon size={14} /> Back to Scans
+        </button>
         <h1>{selected.name}</h1>
         <p className="muted">
           {selected.strategy?.country}{selected.strategy?.stateProvince ? `, ${selected.strategy.stateProvince}` : ''}
-          {' · '}Status: {selected.status}
-          {' · '}{selected._count?.candidates || 0} candidates
+          {' | '}Status: {selected.status}
+          {' | '}{selected._count?.candidates || 0} candidates
         </p>
       </div>
 
@@ -272,7 +379,7 @@ function CreateScanModal({ strategies, onCreate, onClose }: {
       <div className="card" style={{ width: '100%', maxWidth: 480, margin: 16 }}>
         <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2>New Discovery Scan</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted)' }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted)' }}>x</button>
         </div>
         <div style={{ display: 'grid', gap: 16, padding: 16 }}>
           <div>

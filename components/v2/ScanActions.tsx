@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AlertIcon, CheckIcon } from './Icons';
 
 export default function ScanActions({
   scanId,
@@ -106,10 +107,10 @@ export default function ScanActions({
         <span style={{ fontSize: 13, color: '#6b7280' }}>Working... (this may take a minute)</span>
       )}
       {error && (
-        <span style={{ fontSize: 13, color: '#dc2626' }}>⚠ {error}</span>
+        <span style={{ fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 4 }}><AlertIcon size={13} color="#dc2626" /> {error}</span>
       )}
       {success && (
-        <span style={{ fontSize: 13, color: '#16a34a' }}>✓ {success}</span>
+        <span style={{ fontSize: 13, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4 }}><CheckIcon size={13} color="#16a34a" /> {success}</span>
       )}
     </div>
   );

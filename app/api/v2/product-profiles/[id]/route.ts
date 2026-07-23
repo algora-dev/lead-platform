@@ -69,11 +69,8 @@ export async function DELETE(
   });
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  // Soft-delete (archive)
-  await prisma.productProfile.update({
-    where: { id: parseInt(id) },
-    data: { archivedAt: new Date() },
-  });
+  // Hard delete — versions cascade
+  await prisma.productProfile.delete({ where: { id: parseInt(id) } });
 
   return NextResponse.json({ ok: true });
 }

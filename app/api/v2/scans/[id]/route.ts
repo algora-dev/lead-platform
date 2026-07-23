@@ -43,15 +43,14 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
+  const scanId = parseInt(id);
   const scan = await prisma.discoveryScan.findFirst({
-    where: { id: parseInt(id), tenantId: getTenantId(session) },
+    where: { id: scanId, tenantId: getTenantId(session) },
   });
   if (!scan) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  await prisma.discoveryScan.update({
-    where: { id: parseInt(id) },
-    data: { status: 'CANCELLED' },
-  });
+  // Hard delete: cascade removes candidates, provider runs, evidence, etc.
+  await prisma.discoveryScan.delete({ where: { id: scanId } });
 
   return NextResponse.json({ ok: true });
 }

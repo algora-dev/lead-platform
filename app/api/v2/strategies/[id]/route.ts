@@ -129,6 +129,11 @@ export async function DELETE(
     return NextResponse.json({ error: `Cannot delete: ${scanCount} scan(s) are using this strategy` }, { status: 409 });
   }
 
+  // Delete assessments first (they reference strategies)
+  await prisma.strategyAssessment.deleteMany({
+    where: { strategyId: parseInt(id) },
+  });
+
   await prisma.discoveryStrategy.delete({ where: { id: parseInt(id) } });
   return NextResponse.json({ ok: true });
 }

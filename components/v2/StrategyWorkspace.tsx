@@ -2,7 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import AssessmentModal from './AssessmentModal';
+import DeleteModal from './DeleteModal';
 import { type KeywordItem } from './KeywordEditor';
+import {
+  TrashIcon, AlertIcon, BotIcon, FileTextIcon, TargetIcon, SearchIcon,
+  ChevronLeftIcon, ChevronRightIcon,
+} from './Icons';
 
 interface Profile {
   id: number;
@@ -57,6 +62,10 @@ export default function StrategyWorkspace() {
   const [showCreate, setShowCreate] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
   const [notice, setNotice] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
     fetch('/api/v2/strategies').then(r => r.json()).then(d => {
@@ -69,7 +78,6 @@ export default function StrategyWorkspace() {
   const openStrategy = async (id: number) => {
     const d = await fetch(`/api/v2/strategies/${id}`).then(r => r.json());
     setSelected(d);
-    // Auto-open assessment modal if strategy is awaiting confirmation
     if (d.preparationStatus === 'AWAITING_CONFIRMATION' && d.currentAssessment) {
       setShowAssessment(true);
     }
@@ -81,6 +89,52 @@ export default function StrategyWorkspace() {
     if (selected) openStrategy(selected.id);
   };
 
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === strategies.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(strategies.map(s => s.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const r = await fetch('/api/v2/strategies', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setShowDelete(false);
+        setSelectedIds(new Set());
+        setNotice(`Deleted ${d.deleted} strategy(ies)`);
+        load();
+      } else {
+        setDeleteError(d.error || 'Failed to delete');
+      }
+    } catch (e: any) {
+      setDeleteError(e.message);
+    }
+    setDeleting(false);
+  };
+
+  const handleSingleDelete = async (id: number) => {
+    setSelectedIds(new Set([id]));
+    setShowDelete(true);
+  };
+
   // --- List View ---
   if (!selected) {
     return (
@@ -89,8 +143,22 @@ export default function StrategyWorkspace() {
           <h1>Discovery Strategies</h1>
           <p>Compile product and lead profiles into a searchable discovery strategy.</p>
         </div>
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="primary" style={{ fontSize: '0.85rem', padding: '8px 14px' }} onClick={() => setShowCreate(true)}>+ New Strategy</button>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => { setDeleteError(''); setShowDelete(true); }}
+              style={{
+                background: 'none', border: '1px solid #fca5a5', borderRadius: 4,
+                padding: '8px 14px', cursor: 'pointer', fontSize: '0.85rem',
+                color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+            >
+              <TrashIcon size={14} /> Delete {selectedIds.size} selected
+            </button>
+          )}
         </div>
 
         <div className="card">
@@ -100,19 +168,48 @@ export default function StrategyWorkspace() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: 32 }}>
+                  <input
+                    type="checkbox"
+                    checked={strategies.length > 0 && selectedIds.size === strategies.length}
+                    onChange={toggleSelectAll}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </th>
                 <th>Name</th>
                 <th>Country</th>
                 <th>Status</th>
                 <th>Created</th>
+                <th style={{ width: 40 }}></th>
               </tr>
             </thead>
             <tbody>
               {strategies.map(s => (
-                <tr key={s.id} style={{ cursor: 'pointer' }} onClick={() => openStrategy(s.id)}>
-                  <td><strong>{s.name || `Strategy #${s.id}`}</strong></td>
-                  <td>{s.country}{s.stateProvince ? `, ${s.stateProvince}` : ''}</td>
-                  <td>{renderStatus(s)}</td>
-                  <td>{new Date(s.createdAt).toLocaleDateString()}</td>
+                <tr key={s.id}>
+                  <td onClick={e => { e.stopPropagation(); toggleSelect(s.id); }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(s.id)}
+                      onChange={() => {}}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => openStrategy(s.id)}>
+                    <strong>{s.name || `Strategy #${s.id}`}</strong>
+                  </td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => openStrategy(s.id)}>{s.country}{s.stateProvince ? `, ${s.stateProvince}` : ''}</td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => openStrategy(s.id)}>{renderStatus(s)}</td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => openStrategy(s.id)}>{new Date(s.createdAt).toLocaleDateString()}</td>
+                  <td>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleSingleDelete(s.id); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#9ca3af', display: 'flex', alignItems: 'center' }}
+                      onMouseEnter={e => { e.currentTarget.style.color = '#dc2626'; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = '#9ca3af'; }}
+                    >
+                      <TrashIcon size={15} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -126,6 +223,15 @@ export default function StrategyWorkspace() {
         </div>
         {notice && <div className="muted" style={{ marginTop: 8, textAlign: 'center' }}>{notice}</div>}
         {showCreate && <CreateWizard onCreated={(id) => { setShowCreate(false); openStrategy(id); }} onClose={() => setShowCreate(false)} />}
+        <DeleteModal
+          open={showDelete}
+          count={selectedIds.size}
+          itemType="strategy"
+          onConfirm={handleBulkDelete}
+          onCancel={() => { setShowDelete(false); setSelectedIds(new Set()); }}
+          loading={deleting}
+          error={deleteError}
+        />
       </>
     );
   }
@@ -134,7 +240,9 @@ export default function StrategyWorkspace() {
   return (
     <>
       <div className="page-header">
-        <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginBottom: 8 }}>← Back to Strategies</button>
+        <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <ChevronLeftIcon size={14} /> Back to Strategies
+        </button>
         <h1>{selected.name || `Strategy #${selected.id}`}</h1>
         <p className="muted">
           {selected.country}{selected.stateProvince ? `, ${selected.stateProvince}` : ''}{selected.county ? `, ${selected.county}` : ''}{selected.city ? `, ${selected.city}` : ''}
@@ -148,22 +256,23 @@ export default function StrategyWorkspace() {
           padding: 12, borderRadius: 6, marginBottom: 16, fontSize: 14,
           background: statusBg(selected.preparationStatus),
           border: `1px solid ${statusBorder(selected.preparationStatus)}`,
+          display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          {selected.preparationStatus === 'ASSESSING' && '🤖 AI is assessing your profiles...'}
+          {selected.preparationStatus === 'ASSESSING' && <><BotIcon size={16} color="#1e40af" /> AI is assessing your profiles...</>}
           {selected.preparationStatus === 'AWAITING_CONFIRMATION' && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>⏳ AI assessment ready — review and confirm to enable scanning.</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+              <span>AI assessment ready — review and confirm to enable scanning.</span>
               <button className="primary" style={{ fontSize: 13, padding: '6px 14px' }} onClick={() => setShowAssessment(true)}>Review Assessment</button>
             </div>
           )}
-          {selected.preparationStatus === 'FAILED' && `❌ Assessment failed: ${selected.assessmentError || 'Unknown error'}`}
+          {selected.preparationStatus === 'FAILED' && <><AlertIcon size={16} color="#991b1b" /> Assessment failed: {selected.assessmentError || 'Unknown error'}</>}
         </div>
       )}
 
       {/* v3: AI Assessment Summary (if confirmed) */}
       {selected.currentAssessment && selected.currentAssessment.status === 'CONFIRMED' && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-head"><h2>📋 AI Understanding</h2></div>
+          <div className="card-head"><h2 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><FileTextIcon size={16} /> AI Understanding</h2></div>
           <div style={{ padding: 16 }}>
             <p style={{ fontSize: 14, lineHeight: 1.5 }}>{selected.currentAssessment.understandingSummary}</p>
           </div>
@@ -174,7 +283,7 @@ export default function StrategyWorkspace() {
       {selected.finalKeywords && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2>🎯 Scoring Keywords</h2>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><TargetIcon size={16} /> Scoring Keywords</h2>
             <span style={{ fontSize: 13, color: '#6b7280' }}>Threshold: {selected.scoreThreshold ?? 0}</span>
           </div>
           <div style={{ padding: 16 }}>
@@ -195,7 +304,7 @@ export default function StrategyWorkspace() {
       {/* v3: Broad Queries */}
       {selected.finalQueries && selected.finalQueries.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <div className="card-head"><h2>🔍 Search Queries</h2></div>
+          <div className="card-head"><h2 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><SearchIcon size={16} /> Search Queries</h2></div>
           <div style={{ padding: 16 }}>
             <ul style={{ fontSize: 13, marginLeft: 16, lineHeight: 1.8 }}>
               {selected.finalQueries.map((q, i) => <li key={i} style={{ fontFamily: 'monospace' }}>{q}</li>)}
@@ -356,7 +465,7 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
       <div className="card" style={{ width: '100%', maxWidth: 720, margin: 16 }}>
         <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2>Create Strategy — Step {step} of 3</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted)' }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--muted)' }}>x</button>
         </div>
 
         {step === 1 && (
@@ -379,7 +488,7 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
             ))}
             {!products.length && <div className="muted">No product profiles found. <a href="/v2/profiles?tab=product">Create one first</a>.</div>}
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-              <button className="primary" disabled={!selectedProductVersions.length} onClick={() => setStep(2)}>Next →</button>
+              <button className="primary" disabled={!selectedProductVersions.length} onClick={() => setStep(2)}>Next <ChevronRightIcon size={14} /></button>
             </div>
           </div>
         )}
@@ -404,8 +513,8 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
             ))}
             {!customers.length && <div className="muted">No lead profiles found. <a href="/v2/profiles?tab=customer">Create one first</a>.</div>}
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-              <button className="secondary" onClick={() => setStep(1)}>← Back</button>
-              <button className="primary" disabled={!selectedCustomerVersions.length} onClick={() => setStep(3)}>Next →</button>
+              <button className="secondary" onClick={() => setStep(1)}><ChevronLeftIcon size={14} /> Back</button>
+              <button className="primary" disabled={!selectedCustomerVersions.length} onClick={() => setStep(3)}>Next <ChevronRightIcon size={14} /></button>
             </div>
           </div>
         )}
@@ -451,8 +560,8 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
             {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 8 }}>{error}</div>}
 
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-              <button className="secondary" onClick={() => setStep(2)}>← Back</button>
-              <button className="primary" disabled={creating} onClick={create}>{creating ? 'Creating + AI Assessing…' : 'Create & Assess'}</button>
+              <button className="secondary" onClick={() => setStep(2)}><ChevronLeftIcon size={14} /> Back</button>
+              <button className="primary" disabled={creating} onClick={create}>{creating ? 'Creating + AI Assessing...' : 'Create & Assess'}</button>
             </div>
           </div>
         )}
