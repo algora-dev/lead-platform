@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getSession, getTenantId } from '@/lib/auth';
 import { runner } from '@/lib/v2/job-runner';
 import '@/lib/v2/assessment-handler';
@@ -40,6 +40,7 @@ export async function POST(
   }
 
   const jobId = await runner.create('assessment', { scanId: scan.id, tenantId: tid });
+  after(() => runner.waitForCompletion(jobId));
   return NextResponse.json({ scanId: scan.id, jobId }, { status: 202 });
 }
 

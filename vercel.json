@@ -1,9 +1,24 @@
 {
   "functions": {
+    "app/api/v2/scans/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/v2/scans/[id]/rescan/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/v2/scans/[id]/assess/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/v2/scans/[id]/evidence/route.ts": {
+      "maxDuration": 60
+    },
     "app/api/scans/route.ts": {
       "maxDuration": 60
     },
     "app/api/csv-upload/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/v2/strategies/route.ts": {
       "maxDuration": 60
     }
   }

@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getSession, getTenantId } from '@/lib/auth';
 import { runner } from '@/lib/v2/job-runner';
 import { validateStrategy } from '@/lib/v2/strategy-validator';
@@ -101,11 +101,16 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Create job
+  // Create job — use after() to keep the function alive on Vercel serverless
+  // so the background scan work doesn't get killed when the response is sent.
   const jobId = await runner.create('discovery-scan', {
     scanId: scan.id,
     tenantId: tid,
   });
+
+  // On Vercel, after() extends the function lifetime beyond the response
+  // so the async scan handler can complete its DB + API work.
+  after(() => runner.waitForCompletion(jobId));
 
   return NextResponse.json({ scan, jobId }, { status: 201 });
 }

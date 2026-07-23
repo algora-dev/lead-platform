@@ -8,7 +8,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getSession, getTenantId } from '@/lib/auth';
 import { runner } from '@/lib/v2/job-runner';
 import '@/lib/v2/evidence-handler'; // register handler
@@ -102,6 +102,8 @@ export async function POST(
     candidateIds: targetCandidateIds,
     refresh: body.refresh || false,
   });
+
+  after(() => runner.waitForCompletion(jobId));
 
   return NextResponse.json({
     scanId: scan.id,

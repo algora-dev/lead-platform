@@ -123,6 +123,20 @@ class InProcessJobRunner {
     }
     return false;
   }
+
+  /**
+   * Wait for a job to reach a terminal state.
+   * Used with Next.js after() to keep serverless functions alive.
+   */
+  async waitForCompletion(id: string, timeoutMs = 55000): Promise<void> {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const job = this.jobs.get(id);
+      if (!job) return;
+      if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') return;
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
 }
 
 // Singleton
