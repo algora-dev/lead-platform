@@ -14,7 +14,7 @@ const SYSTEM_PROMPT = `You are a lead intelligence strategist. You analyse produ
 Your job:
 1. Understand what the product/service does and who the ideal lead is
 2. Write a short (2-3 sentence) understanding summary
-3. Generate up to 10 scoring keywords — these are terms that, if found in a company's data (name, website, description, industry), indicate this is a good lead. Rank by importance. Assign points (out of 100 total) based on importance.
+3. Generate up to 10 scoring keywords — these are terms that, if found in a company's data (name, website, description, industry), indicate this is a good lead. Rank by importance. Assign points based on importance. CRITICAL: the points for ALL keywords MUST total exactly 100. Double-check your arithmetic before returning. For example, if you have 5 keywords, their points might be 30, 25, 20, 15, 10 = 100.
 4. Generate 5-8 broad search queries for finding companies. These should be SIMPLE and WIDE — e.g. "roofing companies Birmingham" not "roofing contractor quote estimate Birmingham England". Cast a wide net.
 
 Return JSON:
@@ -200,7 +200,43 @@ export async function generateAssessment(input: AssessmentInput): Promise<Assess
     throw new AssessmentError('AI response was not valid JSON', 'INVALID_OUTPUT');
   }
 
-  const validation = validateAssessment(parsed);
+  // Try strict validation first
+  let validation = validateAssessment(parsed);
+
+  // If validation failed, check if the ONLY issue is points not totalling 100.
+  // If so, auto-normalise the points proportionally and re-validate.
+  if (!validation.ok) {
+    const pointErrors = validation.errors.filter(e => e.message.includes('Points must total exactly'));
+    const otherErrors = validation.errors.filter(e => !e.message.includes('Points must total exactly'));
+
+    if (pointErrors.length > 0 && otherErrors.length === 0 && Array.isArray((parsed as any)?.scoringKeywords)) {
+      const keywords = (parsed as any).scoringKeywords as { keyword: string; points: number; rationale: string }[];
+      const total = keywords.reduce((sum, k) => sum + (Number(k.points) || 0), 0);
+
+      if (total > 0) {
+        // Scale points to total exactly 100, rounding to integers
+        const scaled = keywords.map(k => {
+          const raw = (Number(k.points) || 0) * 100 / total;
+          return { ...k, points: Math.round(raw) };
+        });
+
+        // Fix rounding drift: adjust the largest keyword to make total exactly 100
+        const newTotal = scaled.reduce((sum, k) => sum + k.points, 0);
+        if (newTotal !== 100) {
+          const diff = 100 - newTotal;
+          const maxIdx = scaled.reduce((max, k, i) => k.points > scaled[max].points ? i : max, 0);
+          scaled[maxIdx].points = Math.max(1, scaled[maxIdx].points + diff);
+        }
+
+        // Re-validate with normalised points
+        validation = validateAssessment({
+          ...(parsed as Record<string, unknown>),
+          scoringKeywords: scaled,
+        });
+      }
+    }
+  }
+
   if (!validation.ok || !validation.data) {
     const errorSummary = validation.errors.map(e => `${e.field}: ${e.message}`).join('; ');
     throw new AssessmentError(`AI output validation failed: ${errorSummary}`, 'INVALID_OUTPUT');

@@ -343,7 +343,7 @@ function CreateWizard({ onCreated, onClose }: { onCreated: (id: number) => void;
       if (r.ok) {
         onCreated(d.strategyId || d.id);
       } else {
-        setError(d.error || d.detail || 'Failed to create strategy');
+        setError(d.error + (d.detail ? `: ${d.detail}` : ''));
       }
     } catch (e: any) {
       setError(e.message);
